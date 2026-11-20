@@ -399,7 +399,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
     </div>
     <div class="views" role="tablist" aria-label="View">
       <button role="tab" id="tab-recipes" aria-selected="true" aria-controls="view-recipes">Recipes <span class="n" id="n-recipes"></span></button>
-      <button role="tab" id="tab-plans" aria-selected="false" aria-controls="view-plans">Day plans <span class="n" id="n-plans"></span></button>
+      <button role="tab" id="tab-plans" aria-selected="false" aria-controls="view-plans">Meal plans <span class="n" id="n-plans"></span></button>
       <button role="tab" id="tab-favs" aria-selected="false" aria-controls="view-favs">Favorites <span class="n" id="n-favs"></span></button>
     </div>
     <details class="fold" id="contents-wrap">
@@ -482,8 +482,8 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
     </section>
 
     <section id="view-plans" role="tabpanel" aria-labelledby="tab-plans" hidden>
-      <h2 class="plans-head">Day plans</h2>
-      <p class="plans-intro">From chapter 12, Days and Weeks: whole days built around one Sunday batch. Each recipe shows whether your kitchen covers it.</p>
+      <h2 class="plans-head">Meal plans</h2>
+      <p class="plans-intro">From chapter 12, Days and Weeks: single days and whole weeks built around one Sunday batch. Each recipe shows whether your kitchen covers it.</p>
       <p class="legend"><span><i class="dot" style="background:var(--good)"></i>Ready to cook</span><span><i class="dot" style="background:var(--warn)"></i>Missing 1 or 2</span><span><i class="dot" style="border:1.5px solid var(--accent)"></i>Missing 3+</span></p>
       <div class="plans" id="plan-list"></div>
     </section>
@@ -707,6 +707,19 @@ function pageNames(n, title) {
   if (n.romanized && !sameText(n.romanized, title)) out.push({ text: n.romanized });
   if (n.english && !sameText(n.english, title)) out.push({ text: n.english, english: true });
   return out;
+}
+// Meal plans come in three kinds, read from the title: the Sunday batch the others build on, week plans
+// ("Week one: …"), and day plans. A title that matches neither of the first two counts as a day plan.
+function planKind(title) {
+  const t = String(title || "").trim().toLowerCase();
+  if (t.startsWith("the sunday batch")) return "batch";
+  if (/^week\b/.test(t)) return "week";
+  return "day";
+}
+function planSections(plans) {
+  return [["batch", ""], ["day", "Day plans"], ["week", "Week plans"]]
+    .map(([kind, title]) => ({ kind, title, plans: plans.filter(p => planKind(p.title) === kind) }))
+    .filter(sec => sec.plans.length);
 }
 /* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
@@ -1257,9 +1270,14 @@ $("fav-group").addEventListener("click", e => {
 /* ---------------- plans ----------------
    The list's id isn't "plans": an element named by the #plans hash is a fragment target, and landing on it
    (the tab, or Back after closing a recipe) scrolls to it and drops focus. */
+// The Sunday batch first, with no heading of its own, then the day plans and the week plans under theirs.
 function renderPlans() {
   const box = $("plan-list");
-  box.innerHTML = D.plans.map(p => `<article class="plan"><h3>${esc(p.title)}</h3><ul>${p.items.map(it => {
+  box.innerHTML = planSections(D.plans).map(sec => (sec.title ? `<h3 class="group">${esc(sec.title)}<span class="n">${sec.plans.length}</span></h3>` : "") +
+    sec.plans.map(planHTML).join("")).join("");
+}
+function planHTML(p) {
+  return `<article class="plan"><h3>${esc(p.title)}</h3><ul>${p.items.map(it => {
     const m = it.match(/^([A-Z][a-z]+):\s*(.*)$/);
     const when = m ? `<span class="when">${esc(m[1])}</span>` : "";
     let h = esc(m ? m[2] : it);
@@ -1271,7 +1289,7 @@ function renderPlans() {
       return `<button type="button" class="rlink" data-open="${id}" title="${esc(tip)}">${name}<i class="sd ${cls}" aria-label="${esc(tip)}"></i></button>`;
     });
     return `<li>${when}${h}</li>`;
-  }).join("")}</ul></article>`).join("");
+  }).join("")}</ul></article>`;
 }
 
 /* ---------------- recipe sheet ---------------- */
@@ -1359,7 +1377,7 @@ function step(d) {
   renderSheet(byId[id]); sheet.scrollTop = 0;
   history.replaceState({ ...history.state, pos: navPos }, "", location.pathname + location.search + "#" + id);
 }
-// nav: "list" (opened from the results), "keep" (a link inside a recipe), "none" (day plans), "hash" (URL / back button)
+// nav: "list" (opened from the results), "keep" (a link inside a recipe), "none" (meal plans), "hash" (URL / back button)
 function openRecipe(id, { fromHash = false, nav = "none", from = null } = {}) {
   const r = byId[id]; if (!r) return;
   if (!openId) {
@@ -1462,7 +1480,7 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------------- tabs and hash ---------------- */
-// Tabs: recipes, plans, favs. Day plans and Favorites each have a hash (#plans, #favorites); Recipes has none.
+// Tabs: recipes, plans, favs. Meal plans and Favorites each have a hash (#plans, #favorites); Recipes has none.
 const TAB_HASH = { plans: "plans", favs: "favorites" };
 const HASH_TAB = dict([["plans", "plans"], ["favorites", "favs"]]);
 function showTab(name) {
@@ -1471,7 +1489,7 @@ function showTab(name) {
     $("view-" + t).hidden = t !== name;
   });
 }
-// Leaving Day plans or Favorites adds an entry, as entering them does, so one Back returns to that tab.
+// Leaving Meal plans or Favorites adds an entry, as entering them does, so one Back returns to that tab.
 function showRecipes() {
   showTab("recipes");
   if (HASH_TAB[location.hash.slice(1)]) history.pushState(null, "", location.pathname + location.search);
