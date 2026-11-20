@@ -38,10 +38,7 @@ if (!styleMatch || !bodyMatch) {
   throw new Error('Google Docs export did not contain the expected style and body elements')
 }
 
-let sourceBody = bodyMatch[1]
-  .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-  .replace(/<(?:iframe|object|embed)\b[^>]*>[\s\S]*?<\/(?:iframe|object|embed)>/gi, '')
-  .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*')/gi, '')
+let sourceBody = sanitizeSourceBody(bodyMatch[1])
   .replace(/<p[^>]*>(?:\s|&nbsp;|<span[^>]*>\s*<\/span>)*<\/p>/gi, '')
 sourceBody = applyEmphasisClasses(sourceBody, docEmphasisClasses(styleMatch[1]))
 
@@ -578,6 +575,65 @@ function splitRecipeHeading(value) {
     if (tags.length) return { title: value.slice(0, last.index).trim(), tags }
   }
   return { title: value.trim(), tags: [] }
+}
+
+// The Doc's body shares an origin (and localStorage) with the finder, so drop anything that can run script:
+// script and embed elements (closed or not), on* handlers (quoted or not), and javascript:/data:/vbscript: URLs.
+function sanitizeSourceBody(html) {
+  return sanitizeAttributes(html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<(iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<\/?(?:script|iframe|object|embed)\b[^>]*>/gi, ''))
+}
+
+// Reads each start tag's attributes the way a browser does (quoted values may hold > or spaces, unquoted ones
+// end at a space, / also separates). A tag that can't be read that way is escaped rather than passed through.
+function sanitizeAttributes(html) {
+  const start = /<([a-z][^\s/>]*)/gi
+  const attribute = /([\s/]*)(?:([^\s/>="'][^\s/>=]*)(\s*=\s*(?:"[^"]*"|'[^']*'|(?!["'])[^\s>]*))?)?/y
+  let out = ''
+  let from = 0
+  let match
+  while ((match = start.exec(html))) {
+    let at = start.lastIndex
+    let kept = ''
+    for (;;) {
+      attribute.lastIndex = at
+      const [, space, name, assignment = ''] = attribute.exec(html)
+      at = attribute.lastIndex
+      if (!name) { kept += space; break }
+      const value = assignment.replace(/^\s*=\s*/, '').replace(/^(["'])([\s\S]*)\1$/, '$2')
+      const lower = name.toLowerCase()
+      const unsafe = lower.startsWith('on') ||
+        (['href', 'src', 'xlink:href', 'action', 'formaction'].includes(lower) && unsafeUrl(value))
+      if (!unsafe) kept += (/\s/.test(space) ? space : ' ') + name + assignment
+    }
+    if (html[at] !== '>') {
+      out += html.slice(from, match.index) + '&lt;'
+      from = match.index + 1
+      start.lastIndex = from
+      continue
+    }
+    out += html.slice(from, match.index) + '<' + match[1] + kept + '>'
+    from = start.lastIndex = at + 1
+  }
+  return out + html.slice(from)
+}
+
+function unsafeUrl(value) {
+  const decoded = value
+    .replace(/&#x([0-9a-f]+);?/gi, (whole, hex) => codePoint(Number.parseInt(hex, 16), whole))
+    .replace(/&#(\d+);?/g, (whole, decimal) => codePoint(Number(decimal), whole))
+    .replace(/&colon;/gi, ':').replace(/&tab;|&newline;/gi, '')
+    .replace(/[\u0000-\u0020\u007f]+/g, '')
+    .toLowerCase()
+  const head = decoded.split(/[/?#]/, 1)[0]
+  // An entity left undecoded before the first / ? # could still spell out a scheme, so treat it as unsafe.
+  return /^(?:javascript|data|vbscript):/.test(decoded) || /&[a-z][a-z0-9]*;?/.test(head)
+}
+
+function codePoint(number, fallback) {
+  return number > 0 && number <= 0x10ffff ? String.fromCodePoint(number) : fallback
 }
 // @end-testable
 
