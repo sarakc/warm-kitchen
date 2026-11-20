@@ -1264,9 +1264,10 @@ function showTab(name) {
     $("view-" + t).hidden = t !== name;
   });
 }
+// Leaving Day plans or Favorites adds an entry, as entering them does, so one Back returns to that tab.
 function showRecipes() {
   showTab("recipes");
-  if (HASH_TAB[location.hash.slice(1)]) history.replaceState(history.state, "", location.pathname + location.search);
+  if (HASH_TAB[location.hash.slice(1)]) history.pushState(null, "", location.pathname + location.search);
 }
 $("tab-recipes").addEventListener("click", showRecipes);
 ["plans", "favs"].forEach(t => $("tab-" + t).addEventListener("click", () => {
