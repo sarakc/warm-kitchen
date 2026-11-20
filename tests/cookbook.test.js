@@ -76,3 +76,18 @@ test("the sanitizer reads quoted values like a browser and escapes tags it can't
   assert.equal(sanitizeSourceBody('<a title="open onclick=x>x</a>'), '&lt;a title="open onclick=x>x</a>');
   assert.equal(sanitizeSourceBody("<br/><hr />"), "<br/><hr />");
 });
+
+test("the sanitizer escapes tags a Doc export doesn't use, so nothing can hide markup from it", () => {
+  const { sanitizeSourceBody } = loadCookbook();
+  // a script tag split around one that gets removed
+  assert.equal(sanitizeSourceBody("<scr<script>ipt>alert(1)</scr<script>ipt>"), "&lt;script>alert(1)&lt;/script>");
+  // svg animation can set a javascript: link
+  assert.equal(sanitizeSourceBody('<svg><a><set attributeName="href" to="javascript:alert(1)"/></a></svg>'),
+    '&lt;svg><a>&lt;set attributeName="href" to="javascript:alert(1)"/></a>&lt;/svg>');
+  // comments and raw-text elements end where a quoted value would, to a browser
+  assert.equal(sanitizeSourceBody('<!-- <p title=" --><img src=x onerror=alert(1)>">'), '&lt;!-- <p title=" --><img src=x onerror=alert(1)>">');
+  assert.equal(sanitizeSourceBody('<noscript><p title="</noscript><img src=x onerror=alert(1)>">'),
+    '&lt;noscript><p title="</noscript><img src=x onerror=alert(1)>">');
+  assert.equal(sanitizeSourceBody('</ <p title="><img onerror=x>">'), '&lt;/ <p title="><img onerror=x>">');
+  assert.equal(sanitizeSourceBody('<p>a</p ><br></p title=x>'), '<p>a</p ><br>&lt;/p title=x>');
+});

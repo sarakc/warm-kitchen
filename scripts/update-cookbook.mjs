@@ -583,6 +583,8 @@ function splitRecipeHeading(value) {
 
 // The Doc's body shares an origin (and localStorage) with the finder, so drop anything that can run script:
 // script and embed elements (closed or not), on* handlers (quoted or not), and javascript:/data:/vbscript: URLs.
+// Only the plain text-and-table tags a Doc export uses are kept; any other < (comments, svg, noscript, style,
+// a tag split around a removed one) is escaped, since a browser could read what follows it differently.
 function sanitizeSourceBody(html) {
   return sanitizeAttributes(html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
@@ -593,12 +595,29 @@ function sanitizeSourceBody(html) {
 // Reads each start tag's attributes the way a browser does (quoted values may hold > or spaces, unquoted ones
 // end at a space, / also separates). A tag that can't be read that way is escaped rather than passed through.
 function sanitizeAttributes(html) {
-  const start = /<([a-z][^\s/>]*)/gi
+  const tags = new Set(['a', 'b', 'blockquote', 'br', 'caption', 'code', 'col', 'colgroup', 'div', 'em',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'img', 'li', 'ol', 'p', 'pre', 's', 'small', 'span', 'strong',
+    'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'])
+  const start = /<(\/?)([a-z][^\s/>]*)?/gi
   const attribute = /([\s/]*)(?:([^\s/>="'][^\s/>=]*)(\s*=\s*(?:"[^"]*"|'[^']*'|(?!["'])[^\s>]*))?)?/y
+  const endTag = /\s*>/y
   let out = ''
   let from = 0
   let match
   while ((match = start.exec(html))) {
+    const [, slash, tag = ''] = match
+    endTag.lastIndex = start.lastIndex
+    if (!tags.has(tag.toLowerCase()) || (slash && !endTag.test(html))) {
+      out += html.slice(from, match.index) + '&lt;'
+      from = match.index + 1
+      start.lastIndex = from
+      continue
+    }
+    if (slash) {
+      out += html.slice(from, endTag.lastIndex)
+      from = start.lastIndex = endTag.lastIndex
+      continue
+    }
     let at = start.lastIndex
     let kept = ''
     for (;;) {
@@ -618,7 +637,7 @@ function sanitizeAttributes(html) {
       start.lastIndex = from
       continue
     }
-    out += html.slice(from, match.index) + '<' + match[1] + kept + '>'
+    out += html.slice(from, match.index) + '<' + tag + kept + '>'
     from = start.lastIndex = at + 1
   }
   return out + html.slice(from)
