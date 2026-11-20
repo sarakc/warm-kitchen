@@ -142,6 +142,10 @@ const html = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+  <link rel="manifest" href="../manifest.webmanifest">
   <meta name="description" content="The Warm Kitchen — a scrollable pescatarian cookbook from the world's warming traditions.">
   <meta name="color-scheme" content="light">
   <title>The Warm Kitchen — Cookbook</title>
