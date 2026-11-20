@@ -1243,9 +1243,18 @@ $("sheet-close").addEventListener("click", closeRecipe);
 $("sheet-prev").addEventListener("click", () => step(-1));
 $("sheet-next").addEventListener("click", () => step(1));
 scrim.addEventListener("click", closeRecipe);
+// The sheet is modal: Tab and Shift+Tab cycle through its own controls.
+function trapTab(e) {
+  const els = [...sheet.querySelectorAll("button, a[href], input, select, textarea, [tabindex]")]
+    .filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
+  if (!els.length) return;
+  const i = els.indexOf(document.activeElement), last = els.length - 1;
+  if (e.shiftKey ? i <= 0 : i < 0 || i === last) { e.preventDefault(); els[e.shiftKey ? last : 0].focus(); }
+}
 document.addEventListener("keydown", e => {
   if (openId) {
     if (e.key === "Escape") closeRecipe();
+    else if (e.key === "Tab" && !e.altKey && !e.metaKey && !e.ctrlKey) trapTab(e);
     else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !typing(e.target) && !e.altKey && !e.metaKey && !e.ctrlKey) step(e.key === "ArrowLeft" ? -1 : 1);
     return;
   }
