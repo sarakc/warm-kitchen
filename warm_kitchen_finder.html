@@ -259,6 +259,11 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .card h3 { font: 400 21px/1.2 var(--display); margin: 2px 0 0; text-wrap: balance; }
 .card h3 mark { background: var(--accent-soft); color: inherit; border-radius: 2px; padding: 0 1px; }
 .card .origin { display: block; font: 400 14.5px/1.45 var(--body); color: var(--muted); margin: 0; }
+.trads { display: flex; flex-wrap: wrap; gap: 4px; }
+.page .trads { margin: 12px 0 0; }
+.trad { border: 1px solid var(--line); background: none; border-radius: 3px; padding: 3px 6px; font: 500 11.5px/1.2 var(--label); color: var(--muted); }
+.trad:hover { border-color: var(--accent); color: var(--ink); }
+.trad[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
 .card .matched { display: block; font: 500 12.5px/1.45 var(--label); color: var(--muted); }
 .card .matched .label { font-size: 9.5px; color: var(--accent-ink); margin-right: 5px; }
 .card .matched .sep { color: var(--faint); }
@@ -345,7 +350,6 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 .page .tag { font-size: 10.5px; padding: 5px 7px 4px; }
 .page h2 { font: 300 clamp(32px, 5vw, 46px)/1.08 var(--display); margin: 0; letter-spacing: -.005em; text-wrap: balance; }
 .page .origin { font: italic 400 19px/1.3 var(--display); color: var(--muted); margin: 6px 0 0; }
-.page .meta { font: 500 12px/1.5 var(--label); color: var(--faint); margin: 10px 0 0; letter-spacing: .02em; }
 .page .marks { font-size: 14px; color: var(--muted); margin: 10px 0 0; font-style: italic; }
 .page .lead { font-style: italic; color: var(--muted); margin: 20px 0 0; }
 .page .body { display: grid; grid-template-columns: minmax(200px, 34%) 1fr; gap: 32px; margin-top: 22px; }
@@ -458,6 +462,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
               <select id="sort">
                 <option value="best">Best match</option>
                 <option value="book">Book order</option>
+                <option value="trad">By tradition</option>
                 <option value="az">A to Z</option>
               </select></div>
           </div>
@@ -637,6 +642,26 @@ function linkIngredients(html, ids, names, wrap) {
     return out + part.slice(at);
   }).join("");
 }
+// The tradition a place or name stands for: a tradition itself, a part of one ("Egypt", "Ayurveda", "Swahili coast"),
+// or a synonym the book uses. "" when it isn't one of them (more specific places, like Canton or Jamaica, aren't).
+const TRAD_SYNONYMS = { scandinavia: "Nordic", "middle east": "Levant, Egypt and Maghreb" };
+function tradAliasOf(name, trads) {
+  const key = name.normalize("NFC").trim().toLowerCase().replace(/^the\s+/, "");
+  if (Object.prototype.hasOwnProperty.call(TRAD_SYNONYMS, key) && trads.includes(TRAD_SYNONYMS[key])) return TRAD_SYNONYMS[key];
+  for (const t of trads) {
+    const parts = t.replace(/\(([^)]*)\)/g, ", $1").split(/\s*(?:,|\band\b)\s*/).map(x => x.trim().toLowerCase().replace(/^the\s+/, ""));
+    if (t.toLowerCase() === key || parts.includes(key)) return t;
+  }
+  return "";
+}
+// The book heading's origin, minus what the tradition chips already say: "China" under China goes,
+// "Xiaomi Nangua Zhou, China" keeps "Xiaomi Nangua Zhou", "Korean pumpkin porridge" and "Canton" stay.
+function originNote(origin, traditions, trads) {
+  if (!origin) return "";
+  const restates = seg => [seg, ...[seg.split(/\s*(?:\/|\band\b)\s*/)]].some(p => (Array.isArray(p) ? p : [p])
+    .every(x => traditions.includes(tradAliasOf(x, trads))));
+  return origin.split(/\s*,\s*/).filter(seg => seg && !restates(seg)).join(", ");
+}
 /* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -675,7 +700,7 @@ function save() {
   try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup })); }
   catch (e) { /* ignore */ }
 }
-const SORTS = ["book", "az"];
+const SORTS = ["book", "trad", "az"];
 let urlSearch = null; // the query string the filters were last read from or written to
 function readURL() {
   Object.assign(S, parseFilters(location.search, { jobs: JOBS, chapters, trads: TRADS, vocab: V, sorts: SORTS }));
@@ -785,10 +810,10 @@ function markTitle(title, qw) {
     i % 2 && words(p).some(t => qw.some(q => wordHit(q, t))) ? `<mark>${esc(p)}</mark>` : esc(p)).join("");
 }
 const HIT_LABEL = { ingredient: "Ingredient", tradition: "Tradition", chapter: "Chapter", variation: "Variation" };
-function matchLine(m, sub) {
+function matchLine(m, shown) {
   const seen = new Set(), parts = [];
   for (const h of m.hits) {
-    if (h.kind === "title" || (h.kind === "tradition" && h.show === sub)) continue;
+    if (h.kind === "title" || (h.kind === "tradition" && shown.includes(h.show))) continue;
     const k = h.kind + "|" + h.show; if (seen.has(k)) continue; seen.add(k);
     parts.push(`<span class="label">${HIT_LABEL[h.kind]}</span>${esc(h.show)}`);
   }
@@ -985,7 +1010,7 @@ function syncControls() {
   document.querySelectorAll("#ready-seg button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === S.ready));
 }
 
-const SORT_NAMES = { best: "Best match", book: "Book order", az: "A to Z" };
+const SORT_NAMES = { best: "Best match", book: "Book order", trad: "By tradition", az: "A to Z" };
 function renderMoreState() {
   const n = (S.trad ? 1 : 0) + S.uses.size;
   const el = $("more-state");
@@ -1038,7 +1063,10 @@ function renderResults() {
   };
   if (S.sort === "best") list.sort((a, b) => (qActive ? ms.get(b.id).score - ms.get(a.id).score : 0) || kitchenCmp(a, b));
   else if (S.sort === "az") list.sort((a, b) => a.title.localeCompare(b.title));
-  listIds = list.map(r => r.id);
+  // By tradition: the Favorites grouping, so a recipe with two traditions sits under both (only the filtered one, if any).
+  const tradGroups = S.sort === "trad"
+    ? groupFavs(list, new Set(list.map(r => r.id)), "tradition", D.traditions, NO_TRAD).filter(g => !S.trad || g.key === S.trad) : null;
+  listIds = tradGroups ? tradGroups.flatMap(g => g.recipes.map(r => r.id)) : list.map(r => r.id);
 
   const ready = list.filter(r => !evs.get(r.id).missing.length).length;
   $("summary").innerHTML = (list.length !== R.length ? `<strong>${list.length} of ${R.length} recipes</strong>` : `<strong>All ${R.length} recipes</strong>`) +
@@ -1062,6 +1090,11 @@ function renderResults() {
       : "No recipe fits all of that. Try fewer jobs, or allow a missing ingredient or two."}</p>`;
     return;
   }
+  if (tradGroups) {
+    grid.innerHTML = tradGroups.map(g => `<h2 class="group">${esc(g.key)}<span class="n">${g.recipes.length}</span></h2>` +
+      g.recipes.map(r => cardHTML(r, evs.get(r.id), ms.get(r.id), qw)).join("")).join("");
+    return;
+  }
   const group = S.sort === "book" && !S.chapter;
   let html = "", last = null;
   for (const r of list) {
@@ -1078,14 +1111,14 @@ function renderResults() {
 // on top of it are buttons of their own that filter the recipes, and the favorite star sits beside them.
 function cardHTML(r, ev, m, qw) {
   const rd = readyOf(ev);
-  const trad = (r.traditions || []).find(t => t !== NO_TRAD);
-  const sub = r.origin || trad || "";
+  const trads = tradsOf(r), note = originNote(r.origin, r.traditions || [], D.traditions);
   return `<div class="cardbox"><div class="card">
       <span class="card-head">${filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
       <h3><button type="button" class="open" data-open="${r.id}">${markTitle(r.title, qw)}</button></h3>
-      ${r.origin ? `<span class="origin">${esc(r.origin)}</span>` : trad ? `<span class="origin">${filterBtn("trad", trad, trad, "linkbtn")}</span>` : ""}
-      ${m ? matchLine(m, sub) : ""}
+      ${tradChips(trads)}
+      ${note ? `<span class="origin">${esc(note)}</span>` : ""}
+      ${m ? matchLine(m, [r.origin, note, ...trads]) : ""}
       <span class="tags">${r.tags.map(t => jobBtn(t)).join("")}</span>
     </div>${starHTML(r.id)}</div>`;
 }
@@ -1096,6 +1129,10 @@ function filterBtn(kind, v, text, cls, name = text, title = "") {
   return `<button type="button" class="${cls}" data-filter="${kind}" data-v="${esc(v)}" aria-pressed="${filterOn(kind, v)}" aria-label="Filter by ${esc(name)}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</button>`;
 }
 const jobBtn = t => filterBtn("jobs", t, t, `tag t-${t.toLowerCase()}`, t, JOB_INFO[t] || "");
+// Traditions show as chips, always right under the title. "No single tradition" gets no chip: it isn't a place to
+// filter by (the Tradition filter doesn't offer it), and By tradition still groups those recipes under it.
+const tradsOf = r => (r.traditions || []).filter(t => TRADS.includes(t));
+const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
 const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => TRADS.includes(v), uses: v => Object.hasOwn(V, v) };
 let pendingFilter = null;
 function filterFrom(kind, v) {
@@ -1232,13 +1269,13 @@ function renderSheet(r) {
   const heading = x => x.title + (x.origin ? ` (${x.origin})` : "") + (x.marks ? ` ${x.marks}` : "");
   const children = R.filter(x => x.parent === r.id && !r.variations.some(v => v.name === heading(x)));
   const parent = r.parent ? byId[r.parent] : null;
-  const meta = (r.traditions || []).filter(t => t !== r.origin).map(t => TRADS.includes(t) ? filterBtn("trad", t, t, "linkbtn") : esc(t)).join(" · ");
+  const note = originNote(r.origin, r.traditions || [], D.traditions);
   const st = statusOf(ev);
   $("sheet-page").innerHTML = `
     <div class="tags">${r.tags.map(t => jobBtn(t)).join("")}</div>
     <h2 id="sheet-title">${esc(r.title)}</h2>
-    ${r.origin ? `<p class="origin">${esc(r.origin)}</p>` : ""}
-    ${meta ? `<p class="meta">${meta}</p>` : ""}
+    ${tradChips(tradsOf(r))}
+    ${note ? `<p class="origin">${esc(note)}</p>` : ""}
     <p class="status ${st.cls}" style="display:flex;gap:8px;margin:12px 0 0;font-size:14.5px"><i class="dot"></i><span>${esc(st.text)}</span></p>
     ${marks.map(m => `<p class="marks">${esc(m)}</p>`).join("")}
     ${r.lead ? `<p class="lead">${rich(r.lead, r.id)}</p>` : ""}

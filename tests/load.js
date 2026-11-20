@@ -3,7 +3,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const EXPORTS = ["dict", "cleanFavs", "knownFavs", "groupFavs", "withinPantryLimit", "pantryStatus",
-  "parseFilters", "filterQuery", "toggleFilter", "linkIngredients"];
+  "parseFilters", "filterQuery", "toggleFilter", "linkIngredients",
+  "originNote", "tradAliasOf"];
 
 // The page has two <script> tags: the first is the recipe JSON, the last is the app.
 function scriptSource() {
