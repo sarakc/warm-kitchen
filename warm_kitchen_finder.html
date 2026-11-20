@@ -264,7 +264,16 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .group:first-child { margin-top: 0; }
 .group .num { font: 600 11px/1 var(--label); letter-spacing: .1em; color: var(--accent); }
 .group .n { margin-left: auto; font: 500 11.5px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
-.card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 10px; }
+.card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 10px; padding-right: 36px; }
+.cardbox { position: relative; display: flex; }
+.cardbox > .card { flex: 1; min-width: 0; }
+.fav { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px;
+       background: none; color: var(--faint); transition: color .15s; }
+.cardbox > .fav { position: absolute; right: 8px; bottom: 8px; }
+.fav:hover { color: var(--accent-ink); }
+.fav[aria-pressed="true"] { color: var(--accent); }
+.fav[aria-pressed="true"] svg { fill: currentColor; }
+@media (prefers-reduced-motion: reduce) { .fav { transition: none; } }
 .tag { font: 600 9.5px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; padding: 4px 6px 3.5px; border-radius: 3px; }
 .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; display: inline-block; }
 .st-ready .dot { background: var(--good); }
@@ -454,6 +463,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
   <div class="sheet-bar">
     <span class="label" id="sheet-chapter"></span>
     <div class="sheet-actions">
+      <button type="button" class="fav" id="sheet-fav" data-fav="" aria-pressed="false" aria-label="Save to favorites" title="Save to favorites"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
       <div class="sheet-nav" id="sheet-nav" hidden>
         <button type="button" id="sheet-prev" aria-label="Previous recipe" title="Previous (←)">‹ Prev</button>
         <span id="sheet-pos" aria-live="polite"></span>
@@ -527,17 +537,22 @@ const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.
 /* ---------------- state ----------------
    The kitchen lives in this browser; search and filters live in the URL so a refresh or a shared link keeps them. */
 const S = { have: new Set(), uses: new Set(), jobs: new Set(), ready: "any", chapter: "", trad: "",
-            sort: "best", q: "", firstVisit: false };
+            sort: "best", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter" };
+const FAV_GROUPS = ["chapter", "tradition"];
 function load() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE) || "null");
-    if (saved && Array.isArray(saved.have)) { S.have = new Set(saved.have.filter(id => V[id])); return; }
-  } catch (e) { /* storage unavailable: start fresh */ }
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); }
+  catch (e) { /* storage unavailable: start fresh */ }
+  if (saved && typeof saved === "object") {
+    S.favs = new Set(cleanFavs(saved.favs, byId));
+    if (FAV_GROUPS.includes(saved.favGroup)) S.favGroup = saved.favGroup;
+    if (Array.isArray(saved.have)) { S.have = new Set(saved.have.filter(id => V[id])); return; }
+  }
   EVERYDAY.forEach(id => S.have.add(id));
   S.firstVisit = true;
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have] })); }
+  try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup })); }
   catch (e) { /* ignore */ }
 }
 function readURL() {
@@ -932,19 +947,46 @@ function renderResults() {
       const n = list.filter(x => x.chapter === r.chapter).length;
       html += `<h2 class="group"><span class="num">${chapNum(r.chapter)}</span>${esc(chapName(r.chapter))}<span class="n">${n}</span></h2>`;
     }
-    const ev = evs.get(r.id), rd = readyOf(ev), m = ms.get(r.id);
-    const trad = (r.traditions || []).find(t => t !== NO_TRAD);
-    const sub = r.origin || trad || "";
-    html += `<button type="button" class="card" data-open="${r.id}">
+    html += cardHTML(r, evs.get(r.id), ms.get(r.id), qw);
+  }
+  grid.innerHTML = html;
+}
+// A card is a button that opens the recipe; the favorite star sits beside it (a button can't hold another button).
+function cardHTML(r, ev, m, qw) {
+  const rd = readyOf(ev);
+  const trad = (r.traditions || []).find(t => t !== NO_TRAD);
+  const sub = r.origin || trad || "";
+  return `<div class="cardbox"><button type="button" class="card" data-open="${r.id}">
       <span class="card-head"><span class="ch">${esc(chapName(r.chapter))}</span>
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
       <h3>${markTitle(r.title, qw)}</h3>
       ${sub ? `<span class="origin">${esc(sub)}</span>` : ""}
       ${m ? matchLine(m, sub) : ""}
       <span class="tags">${r.tags.map(t => `<span class="tag t-${t.toLowerCase()}">${t}</span>`).join("")}</span>
-    </button>`;
-  }
-  grid.innerHTML = html;
+    </button>${starHTML(r.id)}</div>`;
+}
+
+/* ---------------- favorites ---------------- */
+const STAR_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>`;
+const favLabel = on => (on ? "Remove from favorites" : "Save to favorites");
+function starHTML(id) {
+  const on = S.favs.has(id);
+  return `<button type="button" class="fav" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}" title="${favLabel(on)}">${STAR_SVG}</button>`;
+}
+function syncStar(b) {
+  const on = S.favs.has(b.dataset.fav);
+  b.setAttribute("aria-pressed", on);
+  b.setAttribute("aria-label", favLabel(on));
+  b.title = favLabel(on);
+}
+function favsChanged() {
+  document.querySelectorAll("[data-fav]").forEach(syncStar);
+}
+function toggleFav(id) {
+  if (!byId[id]) return;
+  if (S.favs.has(id)) S.favs.delete(id); else S.favs.add(id);
+  save();
+  favsChanged();
 }
 
 /* ---------------- plans ---------------- */
@@ -971,6 +1013,7 @@ let openId = null, lastFocus = null, lastFocusId = null, navIds = [], closing = 
 function renderSheet(r) {
   const ev = evaluate(r);
   $("sheet-chapter").textContent = r.chapter + (r.section ? " · " + r.section : "");
+  $("sheet-fav").dataset.fav = r.id; syncStar($("sheet-fav"));
   const lines = r.lines.map((l, i) => ({ ...l, ev: ev.lineState[i] }));
   const li = l => {
     const cls = l.ev.st === "have" ? "have" : l.ev.st === "miss" ? "miss" : "";
@@ -1076,6 +1119,8 @@ function closeRecipe() {
 }
 function refreshSheet() { if (openId) renderSheet(byId[openId]); }
 document.addEventListener("click", e => {
+  const f = e.target.closest("[data-fav]");
+  if (f) { e.preventDefault(); toggleFav(f.dataset.fav); return; }
   const o = e.target.closest("[data-open]");
   if (o) {
     e.preventDefault();
