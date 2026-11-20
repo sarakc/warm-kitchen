@@ -487,6 +487,32 @@ const EVERYDAY = ["ghee", "olive-oil", "sesame-oil", "cooking-oil", "butter", "r
   "white-pepper", "fish-sauce", "cilantro", "tomatoes", "spinach", "kombu", "dried-shiitake"].filter(id => V[id]);
 const STORE = "warm-kitchen-finder-v1";
 const NO_TRAD = "No single tradition";
+/* @testable */
+// Favorites saved in this browser: known recipe ids only, once each, in the order they were starred.
+function cleanFavs(list, byId) {
+  if (!Array.isArray(list)) return [];
+  return [...new Set(list.filter(id => typeof id === "string" && Object.prototype.hasOwnProperty.call(byId, id)))];
+}
+// Starred recipes under chapter or tradition headings. Groups and the recipes in them keep book order;
+// a recipe with two traditions sits under both, one with none under the "No single tradition" heading.
+function groupFavs(recipes, favs, mode, tradOrder, noTrad) {
+  const groups = new Map();
+  const add = (key, r) => { if (!groups.has(key)) groups.set(key, []); groups.get(key).push(r); };
+  for (const r of recipes) {
+    if (!favs.has(r.id)) continue;
+    if (mode === "tradition") {
+      const ts = r.traditions && r.traditions.length ? r.traditions : [noTrad];
+      ts.forEach(t => add(t, r));
+    } else add(r.chapter, r);
+  }
+  const keys = [...groups.keys()];
+  if (mode === "tradition") {
+    const rank = t => { const i = tradOrder.indexOf(t); return i < 0 ? tradOrder.length : i; };
+    keys.sort((x, y) => rank(x) - rank(y));
+  }
+  return keys.map(key => ({ key, recipes: groups.get(key) }));
+}
+/* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
