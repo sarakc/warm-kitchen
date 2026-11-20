@@ -565,12 +565,21 @@ function jobTagsHtml(tags) {
   return `<span class="job-tags" aria-label="Recipe jobs">${tags.map((tagName) => `<span class="job-tag tag-${tagName.toLowerCase()}">${tagName}</span>`).join('')}</span>`
 }
 
+// @testable
+// "Title — WARM · OIL": the job tags are the segment after the last spaced em or en dash. A dash
+// with no job tags after it ("Fish — the long way") belongs to the title.
 function splitRecipeHeading(value) {
-  const [name, tagText = ''] = value.split(/\s+—\s+/, 2)
   const allowed = new Set(['WARM', 'OIL', 'BUILD', 'BLOOD', 'PHLEGM', 'CALM'])
-  const tags = tagText.split(/\s*·\s*/).map((tag) => tag.trim().toUpperCase()).filter((tag) => allowed.has(tag))
-  return { title: name.trim(), tags }
+  const separators = [...value.matchAll(/\s+[—–]\s+/g)]
+  const last = separators[separators.length - 1]
+  if (last) {
+    const tagText = value.slice(last.index + last[0].length)
+    const tags = tagText.split(/\s*·\s*/).map((tag) => tag.trim().toUpperCase()).filter((tag) => allowed.has(tag))
+    if (tags.length) return { title: value.slice(0, last.index).trim(), tags }
+  }
+  return { title: value.trim(), tags: [] }
 }
+// @end-testable
 
 function cleanText(value) {
   return decodeEntities(value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
