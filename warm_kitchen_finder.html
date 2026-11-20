@@ -523,10 +523,15 @@ const NO_TRAD = "No single tradition";
 function dict(entries) {
   return Object.assign(Object.create(null), Object.fromEntries(entries));
 }
-// Favorites saved in this browser: known recipe ids only, once each, in the order they were starred.
-function cleanFavs(list, byId) {
+// Favorites saved in this browser: string ids, once each, in the order they were starred. Ids the book
+// doesn't have are kept, so a recipe whose id changes isn't erased from storage by the next save.
+function cleanFavs(list) {
   if (!Array.isArray(list)) return [];
-  return [...new Set(list.filter(id => typeof id === "string" && Object.prototype.hasOwnProperty.call(byId, id)))];
+  return [...new Set(list.filter(id => typeof id === "string"))];
+}
+// The favorites the book has, in starring order: what the Favorites tab shows and counts.
+function knownFavs(favs, byId) {
+  return [...favs].filter(id => Object.prototype.hasOwnProperty.call(byId, id));
 }
 // Starred recipes under chapter or tradition headings. Groups and the recipes in them keep book order;
 // a recipe with two traditions sits under both, one with none under the "No single tradition" heading.
@@ -578,7 +583,7 @@ const FAV_GROUPS = ["chapter", "tradition"];
 // Applies a saved object to the state; returns whether it held a kitchen.
 function applySaved(saved) {
   if (!saved || typeof saved !== "object") return false;
-  S.favs = new Set(cleanFavs(saved.favs, byId));
+  S.favs = new Set(cleanFavs(saved.favs));
   if (FAV_GROUPS.includes(saved.favGroup)) S.favGroup = saved.favGroup;
   if (!Array.isArray(saved.have)) return false;
   S.have = new Set(saved.have.filter(id => V[id]));
@@ -1034,11 +1039,12 @@ function toggleFav(id) {
 }
 let favIds = [];
 function renderFavs() {
-  $("n-favs").textContent = S.favs.size || "";
+  const shown = knownFavs(S.favs, byId).length;
+  $("n-favs").textContent = shown || "";
   document.querySelectorAll("#fav-group button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.favGroup));
-  $("fav-group").hidden = !S.favs.size;
+  $("fav-group").hidden = !shown;
   const grid = $("fav-grid");
-  if (!S.favs.size) {
+  if (!shown) {
     favIds = [];
     grid.innerHTML = `<p class="no-results" style="grid-column:1/-1">No favorites yet. Tap the star on any recipe to save it here.</p>`;
     return;

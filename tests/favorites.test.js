@@ -17,9 +17,16 @@ test("the finder's app script compiles", () => {
   assert.doesNotThrow(() => new vm.Script(scriptSource()));
 });
 
-test("cleanFavs keeps known ids once, in first-seen order", () => {
+test("cleanFavs keeps string ids once, in first-seen order, including ids the book doesn't know", () => {
   const { cleanFavs } = loadFinder();
-  assert.deepEqual([...cleanFavs(["b", "x", "b", 3, "a"], byId)], ["b", "a"]);
+  // "x" may be a recipe whose id changed: it stays in storage instead of being erased on the next save.
+  assert.deepEqual([...cleanFavs(["b", "x", "b", 3, "a", null, "x"])], ["b", "x", "a"]);
+});
+
+test("knownFavs lists only the favorites the book has, ignoring inherited keys", () => {
+  const { knownFavs, dict } = loadFinder();
+  assert.deepEqual([...knownFavs(["b", "x", "constructor", "__proto__", "a", "toString"], dict(Object.entries(byId)))], ["b", "a"]);
+  assert.deepEqual([...knownFavs(new Set(["b", "x", "constructor", "a"]), byId)], ["b", "a"]);
 });
 
 test("dict lookups don't see Object.prototype keys", () => {
@@ -31,9 +38,9 @@ test("dict lookups don't see Object.prototype keys", () => {
 
 test("cleanFavs turns anything that isn't an array into an empty list", () => {
   const { cleanFavs } = loadFinder();
-  assert.deepEqual([...cleanFavs(null, byId)], []);
-  assert.deepEqual([...cleanFavs("a", byId)], []);
-  assert.deepEqual([...cleanFavs({ a: 1 }, byId)], []);
+  assert.deepEqual([...cleanFavs(null)], []);
+  assert.deepEqual([...cleanFavs("a")], []);
+  assert.deepEqual([...cleanFavs({ a: 1 })], []);
 });
 
 test("groupFavs by chapter follows book order and skips empty chapters", () => {
