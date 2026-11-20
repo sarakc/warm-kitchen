@@ -51,9 +51,9 @@
   - tradition mode with favs `{a,b,c}` → `China:[b]`, `Japan:[a,b]`, `No single tradition:[c]`, in that order
   - empty favs → `[]`
   - `parse`: the finder's main script compiles (`new vm.Script(src)` doesn't throw)
-- [ ] **Step 2: Run** `node --test tests/`. Expected: FAIL (the helpers aren't defined).
+- [ ] **Step 2: Run** `node --test tests/*.test.js`. Expected: FAIL (the helpers aren't defined).
 - [ ] **Step 3: Implement** both helpers in the testable region. They may only use their arguments.
-- [ ] **Step 4: Run** `node --test tests/`. Expected: all pass.
+- [ ] **Step 4: Run** `node --test tests/*.test.js`. Expected: all pass.
 - [ ] **Step 5: Commit** `git add tests warm_kitchen_finder.html && git commit -m "Favorites: grouping and cleanup helpers with tests"`
 
 ### Task 2: Saving favorites and the star button
@@ -87,7 +87,7 @@
   - [ ] After a reload, stars persist and the kitchen is unchanged.
   - [ ] Set `localStorage["warm-kitchen-finder-v1"] = '{"have":["ghee"],"favs":"junk"}'` and reload. There are no errors, ghee is in the kitchen, and nothing is starred.
   - [ ] In a private window, starring works with no console errors.
-- [ ] **Step 5: Check and commit.** `node --test tests/` passes. Commit "Favorites: star on cards and in the recipe".
+- [ ] **Step 5: Check and commit.** `node --test tests/*.test.js` passes. Commit "Favorites: star on cards and in the recipe".
 
 ### Task 3: The Favorites tab
 
@@ -125,4 +125,4 @@
   - [ ] Unstar in the tab; the card disappears. Unstar the last one; the empty state shows and the switch is hidden.
   - [ ] Removing an ingredient from the kitchen updates the Favorites cards' "ready" status.
   - [ ] On a phone-width window (390px), the tab row, the switch and the stars fit without horizontal scroll.
-- [ ] **Step 5: Check and commit.** `node --test tests/` passes. Commit "Favorites: tab grouped by chapter or tradition", including `docs/superpowers/`.
+- [ ] **Step 5: Check and commit.** `node --test tests/*.test.js` passes. Commit "Favorites: tab grouped by chapter or tradition", including `docs/superpowers/`.
