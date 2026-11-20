@@ -577,17 +577,30 @@ function cleanText(value) {
 }
 
 function decodeEntities(value) {
-  const named = {
+  const NAMED_ENTITIES = {
     amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
     mdash: '—', ndash: '–', middot: '·', hellip: '…',
+    lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', deg: '°', frac12: '½', frac14: '¼',
+    frac34: '¾', times: '×', szlig: 'ß', aelig: 'æ', AElig: 'Æ', oelig: 'œ', OElig: 'Œ',
+    oslash: 'ø', Oslash: 'Ø', eth: 'ð', ETH: 'Ð', thorn: 'þ', THORN: 'Þ',
   }
-  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (whole, entity) => {
+
+  // Accented letters (&aacute; &Ocirc; &ccedil; &aring; …): base letter plus a combining mark.
+  const COMBINING_MARKS = {
+    acute: '\u0301', grave: '\u0300', circ: '\u0302', tilde: '\u0303', uml: '\u0308',
+    ring: '\u030A', cedil: '\u0327', caron: '\u030C', macr: '\u0304',
+  }
+
+  return value.replace(/&(#x?[0-9a-f]+|[a-z][a-z0-9]*);/gi, (whole, entity) => {
     if (entity[0] === '#') {
       const hex = entity[1].toLowerCase() === 'x'
       const codePoint = Number.parseInt(entity.slice(hex ? 2 : 1), hex ? 16 : 10)
       return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : whole
     }
-    return named[entity.toLowerCase()] ?? whole
+    if (entity in NAMED_ENTITIES) return NAMED_ENTITIES[entity]
+    const accented = /^([a-z])(acute|grave|circ|tilde|uml|ring|cedil|caron|macr)$/i.exec(entity)
+    if (accented) return (accented[1] + COMBINING_MARKS[accented[2]]).normalize('NFC')
+    return NAMED_ENTITIES[entity.toLowerCase()] ?? whole
   })
 }
 
