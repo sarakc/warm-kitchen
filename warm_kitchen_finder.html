@@ -294,8 +294,8 @@ button.tag { border: 0; }
 button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px currentColor; }
 .linkbtn { border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; }
 .linkbtn:hover, .linkbtn[aria-pressed="true"] { text-decoration: underline; text-underline-offset: 2px; }
-.ingl { text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
-.ingl:hover, .ingl[aria-pressed="true"] { text-decoration: underline solid var(--accent); }
+.ingl { color: inherit; text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
+.ingl:hover, .ingl.on { text-decoration: underline solid var(--accent); }
 .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; display: inline-block; }
 .st-ready .dot { background: var(--good); }
 .st-close .dot { background: var(--warn); }
@@ -1081,7 +1081,10 @@ function renderResults() {
   renderMoreState();
   writeURL();
   updateSheetNav();
-  document.querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", filterOn(b.dataset.filter, b.dataset.v)));
+  document.querySelectorAll("[data-filter]").forEach(b => {
+    if (b.tagName === "A") b.classList.toggle("on", filterOn(b.dataset.filter, b.dataset.v));
+    else b.setAttribute("aria-pressed", filterOn(b.dataset.filter, b.dataset.v));
+  });
 
   const grid = $("grid");
   if (!list.length) {
@@ -1243,8 +1246,9 @@ function renderSheet(r) {
     const cls = l.ev.st === "have" ? "have" : l.ev.st === "miss" ? "miss" : "";
     const need = l.ev.st === "miss" ? `<span class="need">Need ${esc(l.ev.miss.map(short).join(" · "))}<button type="button" data-addall="${l.ev.miss.join(",")}">I have it</button></span>` : "";
     const ids = [...new Set(l.groups.flat(2))];
+    // links rather than buttons, so they wrap with the words around them like the rest of the line
     const text = linkIngredients(rich(l.text, r.id), ids, ingNames, (id, t) =>
-      `<button type="button" class="linkbtn ingl" data-filter="uses" data-v="${id}" aria-pressed="${S.uses.has(id)}" aria-label="Filter by ${t}" title="Recipes that use ${esc(short(id))}">${t}</button>`);
+      `<a class="ingl${S.uses.has(id) ? " on" : ""}" href="?uses=${id}" data-filter="uses" data-v="${id}" aria-label="Filter by ${t}" title="Recipes that use ${esc(short(id))}">${t}</a>`);
     return `<li class="${cls}">${text}${need}</li>`;
   };
   const main = lines.filter(l => l.kind === "main" && !l.hidden), serve = lines.filter(l => l.kind === "serve"),
