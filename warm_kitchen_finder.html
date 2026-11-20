@@ -477,7 +477,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
   <div class="sheet-bar">
     <span class="label" id="sheet-chapter"></span>
     <div class="sheet-actions">
-      <button type="button" class="fav" id="sheet-fav" data-fav="" aria-pressed="false" aria-label="Save to favorites" title="Save to favorites"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
+      <button type="button" class="fav" id="sheet-fav" data-fav="" aria-pressed="false" aria-label="Favorite"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg></button>
       <div class="sheet-nav" id="sheet-nav" hidden>
         <button type="button" id="sheet-prev" aria-label="Previous recipe" title="Previous (←)">‹ Prev</button>
         <span id="sheet-pos" aria-live="polite"></span>
@@ -995,16 +995,14 @@ function cardHTML(r, ev, m, qw) {
 
 /* ---------------- favorites ---------------- */
 const STAR_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>`;
-const favLabel = on => (on ? "Remove from favorites" : "Save to favorites");
+// The star's name stays fixed ("Favorite: Ghee"); aria-pressed says whether it's on.
+const favLabel = id => "Favorite: " + (byId[id] ? byId[id].title : "");
 function starHTML(id) {
-  const on = S.favs.has(id);
-  return `<button type="button" class="fav" data-fav="${id}" aria-pressed="${on}" aria-label="${favLabel(on)}" title="${favLabel(on)}">${STAR_SVG}</button>`;
+  return `<button type="button" class="fav" data-fav="${id}" aria-pressed="${S.favs.has(id)}" aria-label="${esc(favLabel(id))}">${STAR_SVG}</button>`;
 }
 function syncStar(b) {
-  const on = S.favs.has(b.dataset.fav);
-  b.setAttribute("aria-pressed", on);
-  b.setAttribute("aria-label", favLabel(on));
-  b.title = favLabel(on);
+  b.setAttribute("aria-pressed", S.favs.has(b.dataset.fav));
+  b.setAttribute("aria-label", favLabel(b.dataset.fav));
 }
 function favsChanged() {
   renderFavs();
@@ -1142,7 +1140,11 @@ function openRecipe(id, { fromHash = false, nav = "none" } = {}) {
   if (nav === "list") navIds = listIds.slice();
   else if (nav === "favs") navIds = favIds.slice();
   else if (nav === "none") navIds = [];
-  else if (nav === "hash" && !openId) navIds = listIds.includes(id) ? listIds.slice() : [];
+  else if (nav === "hash" && !openId) {
+    const fromFavs = !$("view-favs").hidden && favIds.includes(id);
+    navIds = fromFavs ? favIds.slice() : listIds.includes(id) ? listIds.slice() : [];
+    if (fromFavs) lastFocusId = id;
+  }
   openId = id;
   renderSheet(r);
   sheet.hidden = false; scrim.classList.add("open");
@@ -1161,6 +1163,7 @@ function hideSheet() {
   setTimeout(() => { if (!openId) sheet.hidden = true; }, 230);
   let f = lastFocus;
   if (lastFocusId) f = document.querySelector(`${$("view-favs").hidden ? "#grid" : "#fav-grid"} [data-open="${lastFocusId}"]`) || f;
+  if ((!f || !document.contains(f)) && !$("view-favs").hidden) f = $("fav-grid").querySelector("[data-open]") || $("tab-favs");
   if (f && f.focus && document.contains(f)) f.focus({ preventScroll: !lastFocusId });
 }
 // Closing steps back past every recipe this visit opened, so Back afterwards leaves the finder instead of reopening them.
