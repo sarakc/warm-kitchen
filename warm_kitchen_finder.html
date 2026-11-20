@@ -553,15 +553,20 @@ const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.
 const S = { have: new Set(), uses: new Set(), jobs: new Set(), ready: "any", chapter: "", trad: "",
             sort: "best", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter" };
 const FAV_GROUPS = ["chapter", "tradition"];
+// Applies a saved object to the state; returns whether it held a kitchen.
+function applySaved(saved) {
+  if (!saved || typeof saved !== "object") return false;
+  S.favs = new Set(cleanFavs(saved.favs, byId));
+  if (FAV_GROUPS.includes(saved.favGroup)) S.favGroup = saved.favGroup;
+  if (!Array.isArray(saved.have)) return false;
+  S.have = new Set(saved.have.filter(id => V[id]));
+  return true;
+}
 function load() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); }
   catch (e) { /* storage unavailable: start fresh */ }
-  if (saved && typeof saved === "object") {
-    S.favs = new Set(cleanFavs(saved.favs, byId));
-    if (FAV_GROUPS.includes(saved.favGroup)) S.favGroup = saved.favGroup;
-    if (Array.isArray(saved.have)) { S.have = new Set(saved.have.filter(id => V[id])); return; }
-  }
+  if (applySaved(saved)) return;
   EVERYDAY.forEach(id => S.have.add(id));
   S.firstVisit = true;
 }
@@ -800,6 +805,14 @@ function fitChips() {
 chipsMore.addEventListener("click", () => { chipsOpen = !chipsOpen; fitChips(); });
 addEventListener("resize", fitChips);
 if (document.fonts) document.fonts.ready.then(fitChips);
+// Another tab saved: take its kitchen and favorites so this tab's next save doesn't overwrite them.
+addEventListener("storage", e => {
+  if (e.key !== STORE || e.newValue == null) return;
+  let saved = null;
+  try { saved = JSON.parse(e.newValue); } catch (err) { return; }
+  if (!applySaved(saved)) return;
+  renderChips(); fitChips(); syncBrowse(); renderResults(); renderPlans(); favsChanged(); refreshSheet();
+});
 function kitchenChanged() { save(); renderChips(); fitChips(); syncBrowse(); renderResults(); renderPlans(); renderFavs(); refreshSheet(); }
 
 ingForm("add-form", "add-input", "add-msg", id => { S.have.add(id); kitchenChanged(); });
