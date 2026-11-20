@@ -270,6 +270,12 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 10px; padding-right: 36px; }
 .cardbox { position: relative; display: flex; }
 .cardbox > .card { flex: 1; min-width: 0; }
+/* the title's button covers the card; the filter buttons and star sit above it */
+.card .open { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; }
+.card .open::after { content: ""; position: absolute; inset: 0; border-radius: 8px; }
+.card .open:focus-visible { outline: none; }
+.cardbox:has(.open:focus-visible) > .card { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card [data-filter] { position: relative; z-index: 1; }
 .fav { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px;
        background: none; color: var(--faint); transition: color .15s; }
 .cardbox > .fav { position: absolute; right: 8px; bottom: 8px; }
@@ -278,6 +284,13 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .fav[aria-pressed="true"] svg { fill: currentColor; }
 @media (prefers-reduced-motion: reduce) { .fav { transition: none; } }
 .tag { font: 600 9.5px/1 var(--label); letter-spacing: .12em; text-transform: uppercase; padding: 4px 6px 3.5px; border-radius: 3px; }
+/* metadata that filters the recipes: job tags keep their colours, labels and ingredient names read as text */
+button.tag { border: 0; }
+button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px currentColor; }
+.linkbtn { border: 0; background: none; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; }
+.linkbtn:hover, .linkbtn[aria-pressed="true"] { text-decoration: underline; text-underline-offset: 2px; }
+.ingl { text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
+.ingl:hover, .ingl[aria-pressed="true"] { text-decoration: underline solid var(--accent); }
 .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; display: inline-block; }
 .st-ready .dot { background: var(--good); }
 .st-close .dot { background: var(--warn); }
@@ -451,7 +464,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
         </details>
       </div>
       <div class="summary">
-        <p id="summary"></p>
+        <p id="summary" tabindex="-1"></p>
         <div class="active" id="active"></div>
         <button class="linkish" id="clear-filters" type="button">Clear filters</button>
       </div>
@@ -563,6 +576,67 @@ function pantryStatus(ev, labelFor = id => id) {
   return { cls: n <= 2 ? "st-close" : "st-far",
            text: n === 1 ? `Missing: ${names}` : n === 2 ? `Missing 2: ${names}` : `Missing ${n}` };
 }
+// Search and filters in the query string (?q=&jobs=WARM,OIL&ready=&ch=&trad=&uses=&sort=), so links and Back keep them.
+// Values the book doesn't have are dropped; ctx holds what it does have.
+function parseFilters(search, ctx) {
+  const p = new URLSearchParams(search);
+  const list = k => (p.get(k) || "").split(",").map(s => s.trim()).filter(Boolean);
+  const num = c => (c.match(/^(\d+)\./) || [])[1] || "";
+  return {
+    q: p.get("q") || "",
+    jobs: new Set(list("jobs").map(s => s.toUpperCase()).filter(j => ctx.jobs.includes(j))),
+    ready: ["0", "1", "2"].includes(p.get("ready")) ? p.get("ready") : "any",
+    chapter: ctx.chapters.find(c => num(c) === p.get("ch")) || "",
+    trad: ctx.trads.includes(p.get("trad")) ? p.get("trad") : "",
+    uses: new Set(list("uses").filter(id => Object.prototype.hasOwnProperty.call(ctx.vocab, id))),
+    sort: ctx.sorts.includes(p.get("sort")) ? p.get("sort") : "best",
+  };
+}
+function filterQuery(s) {
+  const p = new URLSearchParams();
+  if (s.q.trim()) p.set("q", s.q.trim());
+  if (s.jobs.size) p.set("jobs", [...s.jobs].join(","));
+  if (s.ready !== "any") p.set("ready", s.ready);
+  if (s.chapter) p.set("ch", (s.chapter.match(/^(\d+)\./) || [])[1] || "");
+  if (s.trad) p.set("trad", s.trad);
+  if (s.uses.size) p.set("uses", [...s.uses].join(","));
+  if (s.sort !== "best") p.set("sort", s.sort);
+  return p.toString().replace(/%2C/g, ",");
+}
+// A job tag, chapter, tradition or ingredient clicked on a card or recipe: on if it was off, off if it was on.
+function toggleFilter(s, kind, v) {
+  if (kind === "jobs" || kind === "uses") { if (s[kind].has(v)) s[kind].delete(v); else s[kind].add(v); }
+  else if (kind === "chapter" || kind === "trad") s[kind] = s[kind] === v ? "" : v;
+}
+// Wraps the first mention of each ingredient in a recipe line (outside tags and buttons) with wrap(id, text).
+// names(id) lists what a line might call it, longest match first; plurals count ("onion" for Onions).
+function linkIngredients(html, ids, names, wrap) {
+  const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const words = s => fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const same = (a, b) => a === b || a === b + "s" || b === a + "s" || a === b + "es" || b === a + "es" ||
+    (a.endsWith("ves") && b === a.slice(0, -3) + "f") || (b.endsWith("ves") && a === b.slice(0, -3) + "f");
+  const cands = ids.flatMap(id => names(id).map(n => ({ id, w: words(n) }))).filter(c => c.w.length)
+    .sort((a, b) => b.w.length - a.w.length);
+  const done = new Set();
+  return html.split(/(<button\b[\s\S]*?<\/button>|<[^>]*>)/).map((part, i) => {
+    if (i % 2) return part;
+    const toks = [...part.matchAll(/[\p{L}\p{M}\p{N}]+/gu)].map(m => ({ s: m.index, e: m.index + m[0].length, w: fold(m[0]) }));
+    const spans = [];
+    for (const c of cands) {
+      if (done.has(c.id)) continue;
+      for (let k = 0; k + c.w.length <= toks.length; k++) {
+        if (!c.w.every((w, j) => same(w, toks[k + j].w))) continue;
+        const st = toks[k].s, en = toks[k + c.w.length - 1].e;
+        if (spans.some(x => st < x.e && x.s < en)) continue;
+        spans.push({ s: st, e: en, id: c.id }); done.add(c.id); break;
+      }
+    }
+    spans.sort((a, b) => a.s - b.s);
+    let out = "", at = 0;
+    for (const x of spans) { out += part.slice(at, x.s) + wrap(x.id, part.slice(x.s, x.e)); at = x.e; }
+    return out + part.slice(at);
+  }).join("");
+}
 /* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -601,32 +675,21 @@ function save() {
   try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup })); }
   catch (e) { /* ignore */ }
 }
+const SORTS = ["book", "az"];
+let urlSearch = null; // the query string the filters were last read from or written to
 function readURL() {
-  const p = new URLSearchParams(location.search);
-  const list = k => (p.get(k) || "").split(",").map(s => s.trim()).filter(Boolean);
-  S.q = p.get("q") || "";
-  S.jobs = new Set(list("jobs").map(s => s.toUpperCase()).filter(j => JOBS.includes(j)));
-  S.ready = ["0", "1", "2"].includes(p.get("ready")) ? p.get("ready") : "any";
-  S.chapter = chapters.find(c => chapNum(c) === p.get("ch")) || "";
-  S.trad = TRADS.includes(p.get("trad")) ? p.get("trad") : "";
-  S.uses = new Set(list("uses").filter(id => V[id]));
-  S.sort = ["book", "az"].includes(p.get("sort")) ? p.get("sort") : "best";
+  Object.assign(S, parseFilters(location.search, { jobs: JOBS, chapters, trads: TRADS, vocab: V, sorts: SORTS }));
+  urlSearch = location.search;
 }
+const searchNow = () => { const qs = filterQuery(S); return qs ? "?" + qs : ""; };
+// Typing and the filter controls rewrite the current entry; a clicked tag, chapter, tradition or ingredient adds one.
 let urlTimer = 0;
 function writeURL() {
   clearTimeout(urlTimer);
   urlTimer = setTimeout(() => {
-    const p = new URLSearchParams();
-    if (S.q.trim()) p.set("q", S.q.trim());
-    if (S.jobs.size) p.set("jobs", [...S.jobs].join(","));
-    if (S.ready !== "any") p.set("ready", S.ready);
-    if (S.chapter) p.set("ch", chapNum(S.chapter));
-    if (S.trad) p.set("trad", S.trad);
-    if (S.uses.size) p.set("uses", [...S.uses].join(","));
-    if (S.sort !== "best") p.set("sort", S.sort);
-    const qs = p.toString().replace(/%2C/g, ",");
-    const url = location.pathname + (qs ? "?" + qs : "") + location.hash;
+    const url = location.pathname + searchNow() + location.hash;
     if (url !== location.pathname + location.search + location.hash) history.replaceState(history.state, "", url);
+    urlSearch = location.search;
   }, 250);
 }
 
@@ -776,6 +839,15 @@ function ingForm(formId, inputId, msgId, onHit) {
   inp.addEventListener("input", e => {
     if ((!e.inputType || e.inputType === "insertReplacementText") && D.vocab.some(v => v.label === inp.value)) go();
   });
+}
+
+// What a recipe line might call an ingredient: its label, each part of a label like "Sugar, brown sugar or jaggery"
+// or "Squash or pumpkin (kabocha, butternut)", and its other names. Bare qualifiers ("fresh", "dried") don't count.
+const ING_STOP = ["fresh", "dried", "tinned", "frozen", "other", "ground", "whole", "bell", "white", "red", "green"];
+function ingNames(id) {
+  const v = Object.hasOwn(V, id) ? V[id] : null; if (!v) return [];
+  return [...new Set([v.label, ...v.label.split(/\s*(?:,|\bor\b|\(|\)|…)\s*/), ...(v.aka || [])]
+    .map(x => x.trim()).filter(x => x && !ING_STOP.includes(x.toLowerCase())))];
 }
 
 /* ---------------- kitchen panel ---------------- */
@@ -981,6 +1053,7 @@ function renderResults() {
   renderMoreState();
   writeURL();
   updateSheetNav();
+  document.querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", filterOn(b.dataset.filter, b.dataset.v)));
 
   const grid = $("grid");
   if (!list.length) {
@@ -1001,19 +1074,52 @@ function renderResults() {
   }
   grid.innerHTML = html;
 }
-// A card is a button that opens the recipe; the favorite star sits beside it (a button can't hold another button).
+// The title is the button that opens the recipe, stretched over the whole card; the chapter, tradition and job tags
+// on top of it are buttons of their own that filter the recipes, and the favorite star sits beside them.
 function cardHTML(r, ev, m, qw) {
   const rd = readyOf(ev);
   const trad = (r.traditions || []).find(t => t !== NO_TRAD);
   const sub = r.origin || trad || "";
-  return `<div class="cardbox"><button type="button" class="card" data-open="${r.id}">
-      <span class="card-head"><span class="ch">${esc(chapName(r.chapter))}</span>
+  return `<div class="cardbox"><div class="card">
+      <span class="card-head">${filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
-      <h3>${markTitle(r.title, qw)}</h3>
-      ${sub ? `<span class="origin">${esc(sub)}</span>` : ""}
+      <h3><button type="button" class="open" data-open="${r.id}">${markTitle(r.title, qw)}</button></h3>
+      ${r.origin ? `<span class="origin">${esc(r.origin)}</span>` : trad ? `<span class="origin">${filterBtn("trad", trad, trad, "linkbtn")}</span>` : ""}
       ${m ? matchLine(m, sub) : ""}
-      <span class="tags">${r.tags.map(t => `<span class="tag t-${t.toLowerCase()}">${t}</span>`).join("")}</span>
-    </button>${starHTML(r.id)}</div>`;
+      <span class="tags">${r.tags.map(t => jobBtn(t)).join("")}</span>
+    </div>${starHTML(r.id)}</div>`;
+}
+/* ---------------- filtering from a card or recipe ---------------- */
+// kind is jobs, chapter, trad or uses; the button reads "Filter by WARM" and is pressed while that filter is on.
+const filterOn = (kind, v) => kind === "jobs" ? S.jobs.has(v) : kind === "uses" ? S.uses.has(v) : kind === "chapter" ? S.chapter === v : kind === "trad" ? S.trad === v : false;
+function filterBtn(kind, v, text, cls, name = text, title = "") {
+  return `<button type="button" class="${cls}" data-filter="${kind}" data-v="${esc(v)}" aria-pressed="${filterOn(kind, v)}" aria-label="Filter by ${esc(name)}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</button>`;
+}
+const jobBtn = t => filterBtn("jobs", t, t, `tag t-${t.toLowerCase()}`, t, JOB_INFO[t] || "");
+const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => TRADS.includes(v), uses: v => Object.hasOwn(V, v) };
+let pendingFilter = null;
+function filterFrom(kind, v) {
+  if (!Object.hasOwn(FILTER_OK, kind) || !FILTER_OK[kind](v)) return;
+  const go = () => {
+    toggleFilter(S, kind, v);
+    showTab("recipes"); syncControls(); renderResults();
+    // a new entry, so Back undoes the filter (and returns to the tab it was clicked in)
+    clearTimeout(urlTimer);
+    const url = location.pathname + searchNow();
+    if (url !== location.pathname + location.search + location.hash) history.pushState(null, "", url);
+    urlSearch = location.search;
+    // focus the filter it changed, where it can be turned off again
+    const key = kind === "uses" ? "uses:" + v : kind;
+    const f = kind === "jobs" ? document.querySelector(`.job[data-job="${v}"]`) :
+      [...$("active").querySelectorAll("[data-unset]")].find(b => b.dataset.unset === key);
+    (f || $("summary")).focus();
+  };
+  if (!openId) { go(); return; }
+  // From a recipe: close it first. If closing steps back through history, filter once it has landed.
+  const wk = (history.state && history.state.wk) || 0;
+  if (wk > 0) pendingFilter = go;
+  closeRecipe();
+  if (!wk) go();
 }
 
 /* ---------------- favorites ---------------- */
@@ -1092,13 +1198,17 @@ const sheet = $("sheet"), scrim = $("scrim");
 let openId = null, lastFocus = null, back = null, navIds = [], navBox = null, navPos = -1, closing = false;
 function renderSheet(r) {
   const ev = evaluate(r);
-  $("sheet-chapter").textContent = r.chapter + (r.section ? " · " + r.section : "");
+  $("sheet-chapter").innerHTML = filterBtn("chapter", r.chapter, r.chapter, "linkbtn", "chapter " + chapName(r.chapter)) +
+    (r.section ? " · " + esc(r.section) : "");
   $("sheet-fav").dataset.fav = r.id; syncStar($("sheet-fav"));
   const lines = r.lines.map((l, i) => ({ ...l, ev: ev.lineState[i] }));
   const li = l => {
     const cls = l.ev.st === "have" ? "have" : l.ev.st === "miss" ? "miss" : "";
     const need = l.ev.st === "miss" ? `<span class="need">Need ${esc(l.ev.miss.map(short).join(" · "))}<button type="button" data-addall="${l.ev.miss.join(",")}">I have it</button></span>` : "";
-    return `<li class="${cls}">${rich(l.text, r.id)}${need}</li>`;
+    const ids = [...new Set(l.groups.flat(2))];
+    const text = linkIngredients(rich(l.text, r.id), ids, ingNames, (id, t) =>
+      `<button type="button" class="linkbtn ingl" data-filter="uses" data-v="${id}" aria-pressed="${S.uses.has(id)}" aria-label="Filter by ${t}" title="Recipes that use ${esc(short(id))}">${t}</button>`);
+    return `<li class="${cls}">${text}${need}</li>`;
   };
   const main = lines.filter(l => l.kind === "main" && !l.hidden), serve = lines.filter(l => l.kind === "serve"),
         opt = lines.filter(l => l.kind === "optional");
@@ -1122,13 +1232,13 @@ function renderSheet(r) {
   const heading = x => x.title + (x.origin ? ` (${x.origin})` : "") + (x.marks ? ` ${x.marks}` : "");
   const children = R.filter(x => x.parent === r.id && !r.variations.some(v => v.name === heading(x)));
   const parent = r.parent ? byId[r.parent] : null;
-  const meta = (r.traditions || []).filter(t => t !== r.origin).join(" · ");
+  const meta = (r.traditions || []).filter(t => t !== r.origin).map(t => TRADS.includes(t) ? filterBtn("trad", t, t, "linkbtn") : esc(t)).join(" · ");
   const st = statusOf(ev);
   $("sheet-page").innerHTML = `
-    <div class="tags">${r.tags.map(t => `<span class="tag t-${t.toLowerCase()}" title="${esc(JOB_INFO[t] || "")}">${t}</span>`).join("")}</div>
+    <div class="tags">${r.tags.map(t => jobBtn(t)).join("")}</div>
     <h2 id="sheet-title">${esc(r.title)}</h2>
     ${r.origin ? `<p class="origin">${esc(r.origin)}</p>` : ""}
-    ${meta ? `<p class="meta">${esc(meta)}</p>` : ""}
+    ${meta ? `<p class="meta">${meta}</p>` : ""}
     <p class="status ${st.cls}" style="display:flex;gap:8px;margin:12px 0 0;font-size:14.5px"><i class="dot"></i><span>${esc(st.text)}</span></p>
     ${marks.map(m => `<p class="marks">${esc(m)}</p>`).join("")}
     ${r.lead ? `<p class="lead">${rich(r.lead, r.id)}</p>` : ""}
@@ -1219,6 +1329,8 @@ function closeRecipe() {
 }
 function refreshSheet() { if (openId) renderSheet(byId[openId]); }
 document.addEventListener("click", e => {
+  const flt = e.target.closest("[data-filter]");
+  if (flt) { e.preventDefault(); filterFrom(flt.dataset.filter, flt.dataset.v); return; }
   const f = e.target.closest("[data-fav]");
   if (f) {
     e.preventDefault();
@@ -1288,9 +1400,11 @@ function route() {
     closing = false;
     if (byId[h]) history.replaceState(null, "", location.pathname + location.search);
     hideSheet();
-    if (HASH_TAB[h]) showTab(HASH_TAB[h]);
+    if (pendingFilter) { const go = pendingFilter; pendingFilter = null; go(); }
+    else if (HASH_TAB[h]) showTab(HASH_TAB[h]);
     return;
   }
+  if (urlSearch !== null && location.search !== urlSearch) { clearTimeout(urlTimer); readURL(); syncControls(); renderResults(); }
   if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); }
   else if (byId[h]) openRecipe(h, { fromHash: true, nav: "hash" });
   else { showTab("recipes"); hideSheet(); }

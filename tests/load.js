@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const EXPORTS = ["dict", "cleanFavs", "knownFavs", "groupFavs", "withinPantryLimit", "pantryStatus"];
+const EXPORTS = ["dict", "cleanFavs", "knownFavs", "groupFavs", "withinPantryLimit", "pantryStatus",
+  "parseFilters", "filterQuery", "toggleFilter", "linkIngredients"];
 
 // The page has two <script> tags: the first is the recipe JSON, the last is the app.
 function scriptSource() {
@@ -17,7 +18,7 @@ function loadFinder() {
   let code = "", m;
   while ((m = re.exec(src))) code += m[1] + "\n";
   code += `;({ ${EXPORTS.join(", ")} })`;
-  return vm.runInNewContext(code, {});
+  return vm.runInNewContext(code, { URLSearchParams });
 }
 
 module.exports = { loadFinder, scriptSource };
