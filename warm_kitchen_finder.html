@@ -1426,6 +1426,7 @@ function hideSheet() {
     else if (!$("view-plans").hidden) f = $("tab-plans");
   }
   if (f && f.focus && document.contains(f)) f.focus({ preventScroll: !back });
+  lastFocus = null; // don't keep a card a re-render has replaced (and its subtree) alive
 }
 // Closing steps back past every recipe this visit opened, so Back afterwards leaves the finder instead of reopening them.
 function closeRecipe() {
