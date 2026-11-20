@@ -260,6 +260,11 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .card h3 mark { background: var(--accent-soft); color: inherit; border-radius: 2px; padding: 0 1px; }
 .card .origin { display: block; font: 400 14.5px/1.45 var(--body); color: var(--muted); margin: 0; }
 .trads { display: flex; flex-wrap: wrap; gap: 4px; }
+/* names in their own script: the stacks end in generic families, so the system supplies CJK, Devanagari, Ge'ez,
+   Arabic and other glyphs; lang picks the right ones, and no faux italic or bold is drawn over them */
+.native { font-style: normal; font-synthesis: none; }
+.page .names { font: 400 17px/1.45 var(--body); color: var(--muted); margin: 10px 0 0; }
+.page .names .native { color: var(--ink); }
 .page .trads { margin: 12px 0 0; }
 .trad { border: 1px solid var(--line); background: none; border-radius: 3px; padding: 3px 6px; font: 500 11.5px/1.2 var(--label); color: var(--muted); }
 .trad:hover { border-color: var(--accent); color: var(--ink); }
@@ -662,10 +667,50 @@ function originNote(origin, traditions, trads) {
     .every(x => traditions.includes(tradAliasOf(x, trads))));
   return origin.split(/\s*,\s*/).filter(seg => seg && !restates(seg)).join(", ");
 }
+// Search text: lower case without accents ("Cháo cá" → "chao ca"), plus the letters NFD doesn't take apart.
+const FOLD_LETTERS = { "đ": "d", "ø": "o", "ł": "l", "æ": "ae", "œ": "oe", "ß": "ss", "ı": "i" };
+function fold(s) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[đøłæœßı]/g, c => FOLD_LETTERS[c]);
+}
+// Vowel signs and other marks stay inside a word (Devanagari, Ge'ez, Tibetan).
+function words(s) { return fold(s).split(/[^\p{L}\p{M}\p{N}]+/u).filter(Boolean); }
+// Each query word must match the start of a word ("oat" finds oats, not boat). In scripts written without spaces
+// (Chinese, Japanese, Thai…) a whole name is one "word", so there a query matches anywhere inside it: 南瓜 in 小米南瓜粥.
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}]/u;
+function wordHit(q, t) {
+  if (t === q || t === q + "s" || t === q + "es" || q === t + "s") return 1;
+  if (t.startsWith(q)) return 0.6;
+  return UNSPACED.test(q) && t.includes(q) ? 0.6 : 0;
+}
+// A recipe's names in its own language, from the optional r.names = { native, lang, romanized, english }.
+// The native name carries its lang (for the right glyphs) and dir (rtl for Arabic-script and Hebrew names).
+const RTL_LANGS = ["ar", "fa", "ur", "ps", "ug", "ckb", "sd", "he", "yi", "dv"];
+function nativeName(n) {
+  const lang = typeof n.lang === "string" && n.lang ? n.lang : "";
+  return { text: n.native, ...(lang ? { lang } : {}), dir: RTL_LANGS.includes(lang.toLowerCase().split("-")[0]) ? "rtl" : "auto" };
+}
+const sameText = (a, b) => words(a).join(" ") === words(b).join(" ");
+const within = (a, b) => (" " + words(b).join(" ") + " ").includes(" " + words(a).join(" ") + " ");
+// On a card: the native name, and the romanisation unless the title or origin line already has it.
+function cardNames(n, title, note) {
+  if (!n || typeof n !== "object") return [];
+  const out = [];
+  if (n.native && !sameText(n.native, title)) out.push(nativeName(n));
+  if (n.romanized && !within(n.romanized, title) && !within(n.romanized, note || "")) out.push({ text: n.romanized });
+  return out;
+}
+// On the recipe page: all three, leaving out only one that just repeats the title.
+function pageNames(n, title) {
+  if (!n || typeof n !== "object") return [];
+  const out = [];
+  if (n.native && !sameText(n.native, title)) out.push(nativeName(n));
+  if (n.romanized && !sameText(n.romanized, title)) out.push({ text: n.romanized });
+  if (n.english && !sameText(n.english, title)) out.push({ text: n.english, english: true });
+  return out;
+}
 /* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const fold = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const chapName = c => c.replace(/^\d+\.\s*/, "");
 const chapNum = c => (c.match(/^(\d+)\./) || [])[1] || "";
 const $ = id => document.getElementById(id);
@@ -766,11 +811,6 @@ function readyOf(ev) {
 /* ---------------- search ----------------
    Each query word must match the start of a word somewhere in the recipe (so "oat" finds oats, not boat).
    Where it matches sets the score: title, then tradition and chapter, then ingredients, then variations. */
-const words = s => fold(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-function wordHit(q, t) {
-  if (t === q || t === q + "s" || t === q + "es" || q === t + "s") return 1;
-  return t.startsWith(q) ? 0.6 : 0;
-}
 const plain = s => s.replace(/\*+/g, "").replace(/\s+/g, " ").trim();
 const clip = s => (s.length > 60 ? s.slice(0, 58).replace(/\s+\S*$/, "") + "…" : s);
 function fieldsOf(r) {
@@ -779,6 +819,7 @@ function fieldsOf(r) {
     const trads = [r.origin, ...(r.traditions || []).filter(t => t !== NO_TRAD)].filter(Boolean);
     r._f = [
       { kind: "title", wt: 100, items: [item(r.title)] },
+      { kind: "name", wt: 90, items: r.names ? [r.names.native, r.names.romanized, r.names.english].filter(x => typeof x === "string" && x).map(t => item(t)) : [] },
       { kind: "tradition", wt: 40, items: trads.map(t => item(t)) },
       { kind: "chapter", wt: 40, items: [chapName(r.chapter), r.section].filter(Boolean).map(t => item(t)) },
       { kind: "ingredient", wt: 30, items: [...usesAll(r)].map(id => item(V[id] ? V[id].label : id, short(id))) },
@@ -809,11 +850,11 @@ function markTitle(title, qw) {
   return title.split(/([\p{L}\p{M}\p{N}]+)/u).map((p, i) =>
     i % 2 && words(p).some(t => qw.some(q => wordHit(q, t))) ? `<mark>${esc(p)}</mark>` : esc(p)).join("");
 }
-const HIT_LABEL = { ingredient: "Ingredient", tradition: "Tradition", chapter: "Chapter", variation: "Variation" };
+const HIT_LABEL = { name: "Name", ingredient: "Ingredient", tradition: "Tradition", chapter: "Chapter", variation: "Variation" };
 function matchLine(m, shown) {
   const seen = new Set(), parts = [];
   for (const h of m.hits) {
-    if (h.kind === "title" || (h.kind === "tradition" && shown.includes(h.show))) continue;
+    if (h.kind === "title" || ((h.kind === "tradition" || h.kind === "name") && shown.includes(h.show))) continue;
     const k = h.kind + "|" + h.show; if (seen.has(k)) continue; seen.add(k);
     parts.push(`<span class="label">${HIT_LABEL[h.kind]}</span>${esc(h.show)}`);
   }
@@ -1115,13 +1156,15 @@ function renderResults() {
 function cardHTML(r, ev, m, qw) {
   const rd = readyOf(ev);
   const trads = tradsOf(r), note = originNote(r.origin, r.traditions || [], D.traditions);
+  const names = cardNames(r.names, r.title, note);
+  const line = [...names.map(nameHTML), note ? esc(note) : ""].filter(Boolean).join(" · ");
   return `<div class="cardbox"><div class="card">
       <span class="card-head">${filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
       <h3><button type="button" class="open" data-open="${r.id}">${markTitle(r.title, qw)}</button></h3>
       ${tradChips(trads)}
-      ${note ? `<span class="origin">${esc(note)}</span>` : ""}
-      ${m ? matchLine(m, [r.origin, note, ...trads]) : ""}
+      ${line ? `<span class="origin">${line}</span>` : ""}
+      ${m ? matchLine(m, [r.origin, note, ...trads, ...names.map(x => x.text)]) : ""}
       <span class="tags">${r.tags.map(t => jobBtn(t)).join("")}</span>
     </div>${starHTML(r.id)}</div>`;
 }
@@ -1134,6 +1177,7 @@ function filterBtn(kind, v, text, cls, name = text, title = "") {
 const jobBtn = t => filterBtn("jobs", t, t, `tag t-${t.toLowerCase()}`, t, JOB_INFO[t] || "");
 // Traditions show as chips, always right under the title. "No single tradition" gets no chip: it isn't a place to
 // filter by (the Tradition filter doesn't offer it), and By tradition still groups those recipes under it.
+const nameHTML = x => x.dir ? `<span class="native"${x.lang ? ` lang="${esc(x.lang)}"` : ""} dir="${x.dir}">${esc(x.text)}</span>` : esc(x.text);
 const tradsOf = r => (r.traditions || []).filter(t => TRADS.includes(t));
 const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
 const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => TRADS.includes(v), uses: v => Object.hasOwn(V, v) };
@@ -1273,13 +1317,14 @@ function renderSheet(r) {
   const heading = x => x.title + (x.origin ? ` (${x.origin})` : "") + (x.marks ? ` ${x.marks}` : "");
   const children = R.filter(x => x.parent === r.id && !r.variations.some(v => v.name === heading(x)));
   const parent = r.parent ? byId[r.parent] : null;
-  const note = originNote(r.origin, r.traditions || [], D.traditions);
+  const note = originNote(r.origin, r.traditions || [], D.traditions), names = pageNames(r.names, r.title);
   const st = statusOf(ev);
   $("sheet-page").innerHTML = `
     <div class="tags">${r.tags.map(t => jobBtn(t)).join("")}</div>
     <h2 id="sheet-title">${esc(r.title)}</h2>
     ${tradChips(tradsOf(r))}
-    ${note ? `<p class="origin">${esc(note)}</p>` : ""}
+    ${names.length ? `<p class="names">${names.map(nameHTML).join(" · ")}</p>` : ""}
+    ${note && !names.some(x => sameText(x.text, note)) ? `<p class="origin">${esc(note)}</p>` : ""}
     <p class="status ${st.cls}" style="display:flex;gap:8px;margin:12px 0 0;font-size:14.5px"><i class="dot"></i><span>${esc(st.text)}</span></p>
     ${marks.map(m => `<p class="marks">${esc(m)}</p>`).join("")}
     ${r.lead ? `<p class="lead">${rich(r.lead, r.id)}</p>` : ""}
