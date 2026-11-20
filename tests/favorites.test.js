@@ -22,6 +22,13 @@ test("cleanFavs keeps known ids once, in first-seen order", () => {
   assert.deepEqual([...cleanFavs(["b", "x", "b", 3, "a"], byId)], ["b", "a"]);
 });
 
+test("dict lookups don't see Object.prototype keys", () => {
+  const { dict } = loadFinder();
+  const d = dict([["plans", "plans"], ["favorites", "favs"]]);
+  assert.equal(d.plans, "plans");
+  for (const k of ["constructor", "toString", "__proto__", "hasOwnProperty", "valueOf"]) assert.equal(d[k], undefined, k);
+});
+
 test("cleanFavs turns anything that isn't an array into an empty list", () => {
   const { cleanFavs } = loadFinder();
   assert.deepEqual([...cleanFavs(null, byId)], []);

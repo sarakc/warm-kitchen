@@ -500,8 +500,8 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 "use strict";
 const D = JSON.parse(document.getElementById("data").textContent);
 const R = D.recipes;
-const byId = Object.fromEntries(R.map(r => [r.id, r]));
-const V = Object.fromEntries(D.vocab.map(v => [v.id, v]));
+const byId = dict(R.map(r => [r.id, r]));
+const V = dict(D.vocab.map(v => [v.id, v]));
 const JOBS = ["WARM", "OIL", "BUILD", "BLOOD", "PHLEGM", "CALM"];
 const JOB_INFO = {
   WARM: "Heats a cold body: ginger, cinnamon, pepper, mustard, broths, long cooking",
@@ -517,6 +517,11 @@ const EVERYDAY = ["ghee", "olive-oil", "sesame-oil", "cooking-oil", "butter", "r
 const STORE = "warm-kitchen-finder-v1";
 const NO_TRAD = "No single tradition";
 /* @testable */
+// A lookup table with no prototype, so ids from the URL, the hash or storage ("constructor", "__proto__")
+// can't find Object.prototype's members.
+function dict(entries) {
+  return Object.assign(Object.create(null), Object.fromEntries(entries));
+}
 // Favorites saved in this browser: known recipe ids only, once each, in the order they were starred.
 function cleanFavs(list, byId) {
   if (!Array.isArray(list)) return [];
@@ -1226,7 +1231,7 @@ document.addEventListener("keydown", e => {
 /* ---------------- tabs and hash ---------------- */
 // Tabs: recipes, plans, favs. Day plans and Favorites each have a hash (#plans, #favorites); Recipes has none.
 const TAB_HASH = { plans: "plans", favs: "favorites" };
-const HASH_TAB = { plans: "plans", favorites: "favs" };
+const HASH_TAB = dict([["plans", "plans"], ["favorites", "favs"]]);
 function showTab(name) {
   ["recipes", "plans", "favs"].forEach(t => {
     $("tab-" + t).setAttribute("aria-selected", t === name);
