@@ -462,7 +462,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
       <h2 class="plans-head">Day plans</h2>
       <p class="plans-intro">From chapter 12, Days and Weeks: whole days built around one Sunday batch. Each recipe shows whether your kitchen covers it.</p>
       <p class="legend"><span><i class="dot" style="background:var(--good)"></i>Ready to cook</span><span><i class="dot" style="background:var(--warn)"></i>Missing 1 or 2</span><span><i class="dot" style="border:1.5px solid var(--accent)"></i>Missing 3+</span></p>
-      <div class="plans" id="plans"></div>
+      <div class="plans" id="plan-list"></div>
     </section>
 
     <section id="view-favs" role="tabpanel" aria-labelledby="tab-favs" hidden>
@@ -1050,23 +1050,25 @@ function renderFavs() {
     return;
   }
   const groups = groupFavs(R, S.favs, S.favGroup, D.traditions, NO_TRAD);
-  const seen = new Set();
   grid.innerHTML = groups.map(g => {
     const head = S.favGroup === "chapter"
       ? `<span class="num">${chapNum(g.key)}</span>${esc(chapName(g.key))}` : esc(g.key);
     return `<h2 class="group">${head}<span class="n">${g.recipes.length}</span></h2>` +
-      g.recipes.map(r => { seen.add(r.id); return cardHTML(r, evaluate(r), null, []); }).join("");
+      g.recipes.map(r => cardHTML(r, evaluate(r), null, [])).join("");
   }).join("");
-  favIds = [...seen];
+  // One entry per card, so Prev/Next and "x of N" follow the grid, a two-tradition recipe included twice.
+  favIds = groups.flatMap(g => g.recipes.map(r => r.id));
 }
 $("fav-group").addEventListener("click", e => {
   const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === S.favGroup) return;
   S.favGroup = b.dataset.v; save(); renderFavs();
 });
 
-/* ---------------- plans ---------------- */
+/* ---------------- plans ----------------
+   The list's id isn't "plans": an element named by the #plans hash is a fragment target, and landing on it
+   (the tab, or Back after closing a recipe) scrolls to it and drops focus. */
 function renderPlans() {
-  const box = $("plans");
+  const box = $("plan-list");
   box.innerHTML = D.plans.map(p => `<article class="plan"><h3>${esc(p.title)}</h3><ul>${p.items.map(it => {
     const m = it.match(/^([A-Z][a-z]+):\s*(.*)$/);
     const when = m ? `<span class="when">${esc(m[1])}</span>` : "";
@@ -1084,7 +1086,10 @@ function renderPlans() {
 
 /* ---------------- recipe sheet ---------------- */
 const sheet = $("sheet"), scrim = $("scrim");
-let openId = null, lastFocus = null, lastFocusId = null, navIds = [], closing = false;
+// back: where focus returns on close, as { box, id, pos }: the card or plan link the recipe was opened from (or, after
+// Prev/Next, the card of the recipe shown), found again by position because re-renders replace those elements.
+// navIds: the list Prev/Next walk (one entry per card in navBox); navPos: where the open recipe sits in it.
+let openId = null, lastFocus = null, back = null, navIds = [], navBox = null, navPos = -1, closing = false;
 function renderSheet(r) {
   const ev = evaluate(r);
   $("sheet-chapter").textContent = r.chapter + (r.section ? " · " + r.section : "");
@@ -1143,7 +1148,7 @@ function renderSheet(r) {
 }
 // Prev / next walk the results list the recipe was opened from.
 function updateSheetNav() {
-  const i = openId ? navIds.indexOf(openId) : -1;
+  const i = openId ? navPos : -1;
   $("sheet-nav").hidden = i < 0 || navIds.length < 2;
   if (i < 0) return;
   $("sheet-prev").disabled = i === 0;
@@ -1151,24 +1156,31 @@ function updateSheetNav() {
   $("sheet-pos").textContent = `${i + 1} of ${navIds.length}`;
 }
 function step(d) {
-  const i = navIds.indexOf(openId), id = navIds[i + d];
-  if (i < 0 || !id) return;
-  openId = id; lastFocusId = id;
+  const i = navPos, id = navIds[i + d];
+  if (!openId || i < 0 || !id) return;
+  openId = id; navPos = i + d;
+  if (navBox) back = { box: navBox, id, pos: navPos };
   renderSheet(byId[id]); sheet.scrollTop = 0;
-  history.replaceState(history.state, "", location.pathname + location.search + "#" + id);
+  history.replaceState({ ...history.state, pos: navPos }, "", location.pathname + location.search + "#" + id);
 }
 // nav: "list" (opened from the results), "keep" (a link inside a recipe), "none" (day plans), "hash" (URL / back button)
-function openRecipe(id, { fromHash = false, nav = "none" } = {}) {
+function openRecipe(id, { fromHash = false, nav = "none", from = null } = {}) {
   const r = byId[id]; if (!r) return;
-  if (!openId) { lastFocus = document.activeElement; lastFocusId = nav === "list" || nav === "favs" ? id : null; }
-  if (nav === "list") navIds = listIds.slice();
-  else if (nav === "favs") navIds = favIds.slice();
-  else if (nav === "none") navIds = [];
-  else if (nav === "hash" && !openId) {
-    const fromFavs = !$("view-favs").hidden && favIds.includes(id);
-    navIds = fromFavs ? favIds.slice() : listIds.includes(id) ? listIds.slice() : [];
-    if (fromFavs) lastFocusId = id;
+  if (!openId) {
+    lastFocus = from || document.activeElement;
+    const box = lastFocus && lastFocus.dataset && lastFocus.dataset.open && lastFocus.closest("#grid, #fav-grid, #plan-list");
+    back = box ? { box: box.id, id, pos: [...box.querySelectorAll("[data-open]")].indexOf(lastFocus) } : null;
   }
+  const hashFavs = nav === "hash" && !openId && !$("view-favs").hidden && favIds.includes(id);
+  if (nav === "list") { navIds = listIds.slice(); navBox = "grid"; }
+  else if (nav === "favs" || hashFavs) { navIds = favIds.slice(); navBox = "fav-grid"; }
+  else if (nav === "none") { navIds = []; navBox = null; }
+  else if (nav === "hash" && !openId) { navIds = listIds.includes(id) ? listIds.slice() : []; navBox = navIds.length ? "grid" : null; }
+  // Its place in that list: the card it was opened from, else the place this history entry saved, else its first.
+  const saved = fromHash && history.state ? history.state.pos : -1;
+  navPos = back && back.id === id && back.box === navBox && navIds[back.pos] === id ? back.pos
+    : navIds[saved] === id ? saved : navIds.indexOf(id);
+  if (hashFavs) back = { box: "fav-grid", id, pos: navPos };
   openId = id;
   renderSheet(r);
   sheet.hidden = false; scrim.classList.add("open");
@@ -1177,7 +1189,7 @@ function openRecipe(id, { fromHash = false, nav = "none" } = {}) {
   $("sheet-close").focus({ preventScroll: true });
   if (!fromHash && location.hash !== "#" + id) {
     const wk = ((history.state && history.state.wk) || 0) + 1;
-    history.pushState({ wk }, "", location.pathname + location.search + "#" + id);
+    history.pushState({ wk, pos: navPos }, "", location.pathname + location.search + "#" + id);
   }
 }
 function hideSheet() {
@@ -1186,9 +1198,16 @@ function hideSheet() {
   sheet.classList.remove("open"); scrim.classList.remove("open");
   setTimeout(() => { if (!openId) sheet.hidden = true; }, 230);
   let f = lastFocus;
-  if (lastFocusId) f = document.querySelector(`${$("view-favs").hidden ? "#grid" : "#fav-grid"} [data-open="${lastFocusId}"]`) || f;
-  if ((!f || !document.contains(f)) && !$("view-favs").hidden) f = $("fav-grid").querySelector("[data-open]") || $("tab-favs");
-  if (f && f.focus && document.contains(f)) f.focus({ preventScroll: !lastFocusId });
+  const box = back && $(back.box);
+  if (box && !box.closest("[role=tabpanel]").hidden) {
+    const els = [...box.querySelectorAll("[data-open]")], at = els[back.pos];
+    f = (at && at.dataset.open === back.id ? at : els.find(el => el.dataset.open === back.id)) || f;
+  }
+  if (!f || !document.contains(f)) {
+    if (!$("view-favs").hidden) f = $("fav-grid").querySelector("[data-open]") || $("tab-favs");
+    else if (!$("view-plans").hidden) f = $("tab-plans");
+  }
+  if (f && f.focus && document.contains(f)) f.focus({ preventScroll: !back });
 }
 // Closing steps back past every recipe this visit opened, so Back afterwards leaves the finder instead of reopening them.
 function closeRecipe() {
@@ -1214,7 +1233,7 @@ document.addEventListener("click", e => {
   const o = e.target.closest("[data-open]");
   if (o) {
     e.preventDefault();
-    openRecipe(o.dataset.open, { nav: o.closest("#grid") ? "list" : o.closest("#fav-grid") ? "favs" : o.closest("#sheet") ? "keep" : "none" });
+    openRecipe(o.dataset.open, { from: o, nav: o.closest("#grid") ? "list" : o.closest("#fav-grid") ? "favs" : o.closest("#sheet") ? "keep" : "none" });
     return;
   }
   const add = e.target.closest("[data-addall]");
