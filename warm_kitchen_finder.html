@@ -74,7 +74,7 @@ a:hover { text-decoration: underline; }
 
 /* ---------- layout: contents-style rail on the left, recipes on the right ---------- */
 .app { display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: start; min-height: 100vh; }
-@media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .app { grid-template-columns: 1fr; align-content: start; } }
 
 /* ---------- rail ---------- */
 .rail { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--surface);
@@ -288,6 +288,8 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 /* ---------- plans ---------- */
 .plans-intro { font: italic 400 18px/1.5 var(--display); color: var(--muted); max-width: 62ch; margin: 0 0 20px; }
 .plans-head { font: 300 clamp(28px, 4vw, 36px)/1.1 var(--display); margin: 0 0 8px; }
+.favs-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 20px; }
+.favs-head .plans-head { margin: 0; }
 .plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .plan { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 18px 18px 14px; }
 .plan h3 { font: 400 22px/1.15 var(--display); margin: 0 0 10px; }
@@ -373,6 +375,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
     <div class="views" role="tablist" aria-label="View">
       <button role="tab" id="tab-recipes" aria-selected="true" aria-controls="view-recipes">Recipes <span class="n" id="n-recipes"></span></button>
       <button role="tab" id="tab-plans" aria-selected="false" aria-controls="view-plans">Day plans <span class="n" id="n-plans"></span></button>
+      <button role="tab" id="tab-favs" aria-selected="false" aria-controls="view-favs">Favorites <span class="n" id="n-favs"></span></button>
     </div>
     <details class="fold" id="contents-wrap">
       <summary class="rail-label"><span>Contents</span><span class="fold-n" id="contents-state"></span></summary>
@@ -454,6 +457,17 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
       <p class="plans-intro">From chapter 12, Days and Weeks: whole days built around one Sunday batch. Each recipe shows whether your kitchen covers it.</p>
       <p class="legend"><span><i class="dot" style="background:var(--good)"></i>Ready now</span><span><i class="dot" style="background:var(--warn)"></i>Missing 1 or 2</span><span><i class="dot" style="border:1.5px solid var(--accent)"></i>Missing more</span></p>
       <div class="plans" id="plans"></div>
+    </section>
+
+    <section id="view-favs" role="tabpanel" aria-labelledby="tab-favs" hidden>
+      <div class="favs-head">
+        <h2 class="plans-head">Favorites</h2>
+        <div class="seg" id="fav-group" role="group" aria-label="Group favorites by">
+          <button type="button" data-v="chapter" aria-pressed="true">Chapter</button>
+          <button type="button" data-v="tradition" aria-pressed="false">Tradition</button>
+        </div>
+      </div>
+      <div class="grid" id="fav-grid"></div>
     </section>
   </main>
 </div>
@@ -786,7 +800,7 @@ function fitChips() {
 chipsMore.addEventListener("click", () => { chipsOpen = !chipsOpen; fitChips(); });
 addEventListener("resize", fitChips);
 if (document.fonts) document.fonts.ready.then(fitChips);
-function kitchenChanged() { save(); renderChips(); fitChips(); syncBrowse(); renderResults(); renderPlans(); refreshSheet(); }
+function kitchenChanged() { save(); renderChips(); fitChips(); syncBrowse(); renderResults(); renderPlans(); renderFavs(); refreshSheet(); }
 
 ingForm("add-form", "add-input", "add-msg", id => { S.have.add(id); kitchenChanged(); });
 $("have-chips").addEventListener("click", e => {
@@ -980,6 +994,7 @@ function syncStar(b) {
   b.title = favLabel(on);
 }
 function favsChanged() {
+  renderFavs();
   document.querySelectorAll("[data-fav]").forEach(syncStar);
 }
 function toggleFav(id) {
@@ -988,6 +1003,31 @@ function toggleFav(id) {
   save();
   favsChanged();
 }
+let favIds = [];
+function renderFavs() {
+  $("n-favs").textContent = S.favs.size || "";
+  document.querySelectorAll("#fav-group button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.favGroup));
+  $("fav-group").hidden = !S.favs.size;
+  const grid = $("fav-grid");
+  if (!S.favs.size) {
+    favIds = [];
+    grid.innerHTML = `<p class="no-results" style="grid-column:1/-1">No favorites yet. Tap the star on any recipe to save it here.</p>`;
+    return;
+  }
+  const groups = groupFavs(R, S.favs, S.favGroup, D.traditions, NO_TRAD);
+  const seen = new Set();
+  grid.innerHTML = groups.map(g => {
+    const head = S.favGroup === "chapter"
+      ? `<span class="num">${chapNum(g.key)}</span>${esc(chapName(g.key))}` : esc(g.key);
+    return `<h2 class="group">${head}<span class="n">${g.recipes.length}</span></h2>` +
+      g.recipes.map(r => { seen.add(r.id); return cardHTML(r, evaluate(r), null, []); }).join("");
+  }).join("");
+  favIds = [...seen];
+}
+$("fav-group").addEventListener("click", e => {
+  const b = e.target.closest("button[data-v]"); if (!b || b.dataset.v === S.favGroup) return;
+  S.favGroup = b.dataset.v; save(); renderFavs();
+});
 
 /* ---------------- plans ---------------- */
 function renderPlans() {
@@ -1085,8 +1125,9 @@ function step(d) {
 // nav: "list" (opened from the results), "keep" (a link inside a recipe), "none" (day plans), "hash" (URL / back button)
 function openRecipe(id, { fromHash = false, nav = "none" } = {}) {
   const r = byId[id]; if (!r) return;
-  if (!openId) { lastFocus = document.activeElement; lastFocusId = nav === "list" ? id : null; }
+  if (!openId) { lastFocus = document.activeElement; lastFocusId = nav === "list" || nav === "favs" ? id : null; }
   if (nav === "list") navIds = listIds.slice();
+  else if (nav === "favs") navIds = favIds.slice();
   else if (nav === "none") navIds = [];
   else if (nav === "hash" && !openId) navIds = listIds.includes(id) ? listIds.slice() : [];
   openId = id;
@@ -1106,7 +1147,7 @@ function hideSheet() {
   sheet.classList.remove("open"); scrim.classList.remove("open");
   setTimeout(() => { if (!openId) sheet.hidden = true; }, 230);
   let f = lastFocus;
-  if (lastFocusId) f = document.querySelector(`#grid [data-open="${lastFocusId}"]`) || f;
+  if (lastFocusId) f = document.querySelector(`${$("view-favs").hidden ? "#grid" : "#fav-grid"} [data-open="${lastFocusId}"]`) || f;
   if (f && f.focus && document.contains(f)) f.focus({ preventScroll: !lastFocusId });
 }
 // Closing steps back past every recipe this visit opened, so Back afterwards leaves the finder instead of reopening them.
@@ -1120,11 +1161,20 @@ function closeRecipe() {
 function refreshSheet() { if (openId) renderSheet(byId[openId]); }
 document.addEventListener("click", e => {
   const f = e.target.closest("[data-fav]");
-  if (f) { e.preventDefault(); toggleFav(f.dataset.fav); return; }
+  if (f) {
+    e.preventDefault();
+    const inFavs = !!f.closest("#fav-grid"), at = inFavs ? [...$("fav-grid").querySelectorAll(".fav")].indexOf(f) : -1;
+    toggleFav(f.dataset.fav);
+    if (inFavs) {
+      const stars = $("fav-grid").querySelectorAll(".fav");
+      (stars[Math.min(at, stars.length - 1)] || $("tab-favs")).focus();
+    }
+    return;
+  }
   const o = e.target.closest("[data-open]");
   if (o) {
     e.preventDefault();
-    openRecipe(o.dataset.open, { nav: o.closest("#grid") ? "list" : o.closest("#sheet") ? "keep" : "none" });
+    openRecipe(o.dataset.open, { nav: o.closest("#grid") ? "list" : o.closest("#fav-grid") ? "favs" : o.closest("#sheet") ? "keep" : "none" });
     return;
   }
   const add = e.target.closest("[data-addall]");
@@ -1146,31 +1196,35 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------------- tabs and hash ---------------- */
+// Tabs: recipes, plans, favs. Day plans and Favorites each have a hash (#plans, #favorites); Recipes has none.
+const TAB_HASH = { plans: "plans", favs: "favorites" };
+const HASH_TAB = { plans: "plans", favorites: "favs" };
 function showTab(name) {
-  const plans = name === "plans";
-  $("tab-recipes").setAttribute("aria-selected", !plans);
-  $("tab-plans").setAttribute("aria-selected", plans);
-  $("view-recipes").hidden = plans;
-  $("view-plans").hidden = !plans;
+  ["recipes", "plans", "favs"].forEach(t => {
+    $("tab-" + t).setAttribute("aria-selected", t === name);
+    $("view-" + t).hidden = t !== name;
+  });
 }
 function showRecipes() {
   showTab("recipes");
-  if (location.hash === "#plans") history.replaceState(history.state, "", location.pathname + location.search);
+  if (HASH_TAB[location.hash.slice(1)]) history.replaceState(history.state, "", location.pathname + location.search);
 }
 $("tab-recipes").addEventListener("click", showRecipes);
-$("tab-plans").addEventListener("click", () => { showTab("plans"); if (location.hash !== "#plans") location.hash = "plans"; });
+["plans", "favs"].forEach(t => $("tab-" + t).addEventListener("click", () => {
+  showTab(t); if (location.hash !== "#" + TAB_HASH[t]) location.hash = TAB_HASH[t];
+}));
 function route() {
   const h = location.hash.slice(1);
   if (closing) {
     closing = false;
     if (byId[h]) history.replaceState(null, "", location.pathname + location.search);
     hideSheet();
-    if (h === "plans") showTab("plans");
+    if (HASH_TAB[h]) showTab(HASH_TAB[h]);
     return;
   }
-  if (h === "plans") { showTab("plans"); hideSheet(); }
+  if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); }
   else if (byId[h]) openRecipe(h, { fromHash: true, nav: "hash" });
-  else hideSheet();
+  else { showTab("recipes"); hideSheet(); }
 }
 window.addEventListener("popstate", route);
 window.addEventListener("hashchange", route);
@@ -1183,7 +1237,7 @@ if (S.firstVisit) $("kitchen-hint").textContent =
   "Started from the book's everyday pantry. Remove what you're out of; each card shows what you'd still need.";
 $("n-recipes").textContent = R.length;
 $("n-plans").textContent = D.plans.length;
-renderDatalist(); renderBrowse(); renderChips(); fitChips(); renderResults(); renderPlans(); route();
+renderDatalist(); renderBrowse(); renderChips(); fitChips(); renderResults(); renderPlans(); renderFavs(); route();
 })();
 </script>
 </body>
