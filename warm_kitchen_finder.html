@@ -181,7 +181,7 @@ a:hover { text-decoration: underline; }
 /* ---------- recipe area ---------- */
 .main { padding: 30px clamp(16px, 3.5vw, 44px) 80px; min-width: 0; max-width: 1180px; width: 100%; }
 @media (max-width: 900px) { .main { padding-top: 20px; } }
-.toolbar { display: flex; gap: 12px; align-items: center; }
+.toolbar { display: flex; gap: 12px; align-items: flex-end; }
 @media (max-width: 700px) { .toolbar { flex-direction: column; align-items: stretch; } }
 .search { position: relative; flex: 1; min-width: 0; }
 .search input { width: 100%; height: 44px; padding: 0 40px 0 40px; border: 1px solid var(--line); border-radius: 6px;
@@ -193,6 +193,8 @@ a:hover { text-decoration: underline; }
 .search input:focus ~ .kbd, .search input:not(:placeholder-shown) ~ .kbd { display: none; }
 @media (hover: none) { .search .kbd { display: none; } }
 .search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--faint); }
+.pantry-filter { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; flex: none; }
+.pantry-filter .rail-label { white-space: nowrap; }
 .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 6px; background: var(--wash); flex: none; }
 @media (max-width: 700px) { .seg { align-self: flex-start; } }
 .seg button { border: 0; background: none; border-radius: 4px; padding: 7px 10px; font: 600 11.5px/1 var(--label); color: var(--faint); white-space: nowrap; }
@@ -415,11 +417,14 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
           <input id="q" type="search" placeholder="Search recipes, ingredients, traditions" aria-keyshortcuts="/">
           <kbd class="kbd" aria-hidden="true">/</kbd>
         </div>
-        <div class="seg" id="ready-seg" role="group" aria-label="How much you have">
-          <button type="button" data-v="any" aria-pressed="true">Everything</button>
-          <button type="button" data-v="0" aria-pressed="false">Ready now</button>
-          <button type="button" data-v="1" aria-pressed="false" title="Missing 1 or less">Missing ≤1</button>
-          <button type="button" data-v="2" aria-pressed="false" title="Missing 2 or less">Missing ≤2</button>
+        <div class="pantry-filter">
+          <span class="rail-label" id="ready-label">Missing from your pantry</span>
+          <div class="seg" id="ready-seg" role="group" aria-labelledby="ready-label">
+            <button type="button" data-v="any" aria-pressed="true">Any</button>
+            <button type="button" data-v="0" aria-pressed="false">None</button>
+            <button type="button" data-v="1" aria-pressed="false">Up to 1</button>
+            <button type="button" data-v="2" aria-pressed="false">Up to 2</button>
+          </div>
         </div>
       </div>
       <div class="filterbar">
@@ -455,7 +460,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
     <section id="view-plans" role="tabpanel" aria-labelledby="tab-plans" hidden>
       <h2 class="plans-head">Day plans</h2>
       <p class="plans-intro">From chapter 12, Days and Weeks: whole days built around one Sunday batch. Each recipe shows whether your kitchen covers it.</p>
-      <p class="legend"><span><i class="dot" style="background:var(--good)"></i>Ready now</span><span><i class="dot" style="background:var(--warn)"></i>Missing 1 or 2</span><span><i class="dot" style="border:1.5px solid var(--accent)"></i>Missing more</span></p>
+      <p class="legend"><span><i class="dot" style="background:var(--good)"></i>Ready to cook</span><span><i class="dot" style="background:var(--warn)"></i>Missing 1 or 2</span><span><i class="dot" style="border:1.5px solid var(--accent)"></i>Missing 3+</span></p>
       <div class="plans" id="plans"></div>
     </section>
 
@@ -535,6 +540,17 @@ function groupFavs(recipes, favs, mode, tradOrder, noTrad) {
     keys.sort((x, y) => rank(x) - rank(y));
   }
   return keys.map(key => ({ key, recipes: groups.get(key) }));
+}
+// Pantry-match thresholds are cumulative: "Up to 2" also includes recipes missing zero or one item.
+function withinPantryLimit(limit, missingCount) {
+  return limit === "any" || missingCount <= Number(limit);
+}
+function pantryStatus(ev, labelFor = id => id) {
+  if (ev.needed === 0) return { cls: "st-none", text: "Flexible" };
+  if (!ev.missing.length) return { cls: "st-ready", text: "Ready to cook" };
+  const n = ev.missing.length, names = ev.missing.map(labelFor).join(", ");
+  return { cls: n <= 2 ? "st-close" : "st-far",
+           text: n === 1 ? `Missing: ${names}` : n === 2 ? `Missing 2: ${names}` : `Missing ${n}` };
 }
 /* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
@@ -642,14 +658,10 @@ function statusOf(ev) {
   if (!ev.missing.length) return { cls: "st-ready", text: "Ready to cook" };
   const n = ev.missing.length;
   const list = ev.missing.slice(0, 3).map(short).join(" · ") + (n > 3 ? ` and ${n - 3} more` : "");
-  return { cls: n <= 2 ? "st-close" : "st-far", text: `Missing ${list}` };
+  return { cls: n <= 2 ? "st-close" : "st-far", text: `Missing: ${list}` };
 }
 function readyOf(ev) {
-  if (ev.needed === 0) return { cls: "st-none", text: "Flexible" };
-  if (!ev.missing.length) return { cls: "st-ready", text: "Ready now" };
-  const n = ev.missing.length;
-  return { cls: n <= 2 ? "st-close" : "st-far",
-           text: `Missing ${n}` + (n <= 2 ? " · " + ev.missing.map(short).join(", ") : "") };
+  return pantryStatus(ev, short);
 }
 
 /* ---------------- search ----------------
@@ -906,7 +918,7 @@ function passes(r, ev, m, qActive, skip) {
   if (skip !== "chapter" && S.chapter && r.chapter !== S.chapter) return false;
   if (S.trad && !(r.traditions || []).includes(S.trad)) return false;
   for (const id of S.uses) if (!usesAll(r).has(id)) return false;
-  if (S.ready !== "any" && ev.missing.length > Number(S.ready)) return false;
+  if (!withinPantryLimit(S.ready, ev.missing.length)) return false;
   if (qActive && !m) return false;
   return true;
 }
@@ -1051,7 +1063,7 @@ function renderPlans() {
       const id = nameToId[name]; if (!id) return name;
       const ev = evaluate(byId[id]);
       const cls = ev.needed === 0 || !ev.missing.length ? "ready" : ev.missing.length <= 2 ? "close" : "far";
-      const tip = ev.missing.length ? "Missing " + ev.missing.map(short).join(", ") : "Ready to cook";
+      const tip = ev.missing.length ? "Missing: " + ev.missing.map(short).join(", ") : "Ready to cook";
       return `<button type="button" class="rlink" data-open="${id}" title="${esc(tip)}">${name}<i class="sd ${cls}" aria-label="${esc(tip)}"></i></button>`;
     });
     return `<li>${when}${h}</li>`;
