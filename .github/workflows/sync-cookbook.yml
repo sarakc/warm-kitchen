@@ -1,0 +1,43 @@
+name: Sync cookbook from Google Docs
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Mondays 09:17 UTC; run it by hand after a big edit.
+    - cron: '17 9 * * 1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: warm-kitchen-cookbook-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate the cookbook from Google Docs
+        run: node scripts/update-cookbook.mjs
+
+      # Pages serves main's root, so committing the refreshed cookbook is the deploy.
+      - name: Commit the refreshed cookbook
+        run: |
+          if git diff --quiet -- cookbook/index.html; then
+            echo "No cookbook changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cookbook/index.html
+          git commit -m "chore: sync cookbook"
+          git push
