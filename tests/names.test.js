@@ -10,24 +10,33 @@ const ash = { title: "Persian Ash-e Reshteh", origin: "herb and noodle soup",
   names: { native: "آش رشته", lang: "fa", romanized: "ash-e reshteh", english: "herb and noodle soup" } };
 const plain = v => JSON.parse(JSON.stringify(v));
 
-test("cardNames shows the native name and a romanisation the title and origin don't already have", () => {
+test("cardNames gives the line under a card's title: the native name, then a romanization the title doesn't have", () => {
   const { cardNames } = loadFinder();
-  assert.deepEqual(plain(cardNames(millet.names, millet.title, "Xiaomi Nangua Zhou")),
-    [{ text: "小米南瓜粥", lang: "zh-Hant", dir: "auto" }]);
-  assert.deepEqual(plain(cardNames(millet.names, millet.title, "")),
-    [{ text: "小米南瓜粥", lang: "zh-Hant", dir: "auto" }, { text: "xiaomi nangua zhou" }]);
-  assert.deepEqual(plain(cardNames(chao.names, chao.title, "Vietnamese fish congee")), []); // native = title
-  assert.deepEqual(plain(cardNames(ash.names, ash.title, "herb and noodle soup")), [{ text: "آش رشته", lang: "fa", dir: "rtl" }]);
-  assert.deepEqual(plain(cardNames(undefined, "Ghee", "")), []);
-  assert.deepEqual(plain(cardNames({ romanized: "jat-juk" }, "Pine Nut Porridge", "Korean pine nut porridge")), [{ text: "jat-juk" }]);
+  assert.deepEqual(plain(cardNames(millet.names, millet.title)),
+    [{ text: "小米南瓜粥", lang: "zh-Hant", dir: "auto" }, { text: "xiaomi nangua zhou", rom: true }]);
+  assert.deepEqual(plain(cardNames(chao.names, chao.title)), []); // native = title, no romanization
+  assert.deepEqual(plain(cardNames(ash.names, ash.title)), [{ text: "آش رشته", lang: "fa", dir: "rtl" }]); // romanization is in the title
+  assert.deepEqual(plain(cardNames(undefined, "Ghee")), []);
+  assert.deepEqual(plain(cardNames({ romanized: "jat-juk" }, "Pine Nut Porridge")), [{ text: "jat-juk", rom: true }]);
+});
+
+test("dropRomanized takes the romanized name off the origin line, which the names line already shows", () => {
+  const { dropRomanized } = loadFinder();
+  assert.equal(dropRomanized("Xiaomi Nangua Zhou", millet.names), "");
+  assert.equal(dropRomanized("Ô-á-tsian, Taiwan", { romanized: "Ô-á-tsian" }), "Taiwan");
+  assert.equal(dropRomanized("Miyeok-guk", { native: "미역국", romanized: "Miyeok-guk" }), "");
+  assert.equal(dropRomanized("Maya achiote fish, Yucatán", { native: "Tikin xiik'" }), "Maya achiote fish, Yucatán");
+  assert.equal(dropRomanized("herb and noodle soup", ash.names), "herb and noodle soup");
+  assert.equal(dropRomanized("", millet.names), "");
+  assert.equal(dropRomanized("Canton", undefined), "Canton");
 });
 
 test("pageNames shows native, romanised and English, skipping only a repeat of the title", () => {
   const { pageNames } = loadFinder();
   // the English name is the title here, so it isn't repeated
-  assert.deepEqual(plain(pageNames(millet.names, millet.title)), [{ text: "小米南瓜粥", lang: "zh-Hant", dir: "auto" }, { text: "xiaomi nangua zhou" }]);
+  assert.deepEqual(plain(pageNames(millet.names, millet.title)), [{ text: "小米南瓜粥", lang: "zh-Hant", dir: "auto" }, { text: "xiaomi nangua zhou", rom: true }]);
   assert.deepEqual(plain(pageNames(ash.names, ash.title)), [
-    { text: "آش رشته", lang: "fa", dir: "rtl" }, { text: "ash-e reshteh" }, { text: "herb and noodle soup", english: true }]);
+    { text: "آش رشته", lang: "fa", dir: "rtl" }, { text: "ash-e reshteh", rom: true }, { text: "herb and noodle soup", english: true }]);
   assert.deepEqual(plain(pageNames(chao.names, chao.title)), [{ text: "fish congee", english: true }]);
   assert.deepEqual(plain(pageNames({}, "X")), []);
 });

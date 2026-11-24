@@ -268,7 +268,11 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 /* names in their own script: the stacks end in generic families, so the system supplies CJK, Devanagari, Ge'ez,
    Arabic and other glyphs; lang picks the right ones, and no faux italic or bold is drawn over them */
 .native { font-style: normal; font-synthesis: none; }
-.page .names { font: 400 17px/1.45 var(--body); color: var(--muted); margin: 10px 0 0; }
+/* the native name and its romanization: a quiet line right under the title */
+.card .names { display: block; font: 400 15px/1.35 var(--body); color: var(--muted); margin: -2px 0 2px; }
+.names .rom { font-style: italic; }
+.names .sep { color: var(--faint); }
+.page .names { font: 400 19px/1.35 var(--body); color: var(--muted); margin: 8px 0 0; }
 .page .names .native { color: var(--ink); }
 .page .trads { margin: 12px 0 0; }
 .trad { border: 1px solid var(--line); background: none; border-radius: 3px; padding: 3px 6px; font: 500 11.5px/1.2 var(--label); color: var(--muted); }
@@ -696,12 +700,12 @@ function nativeName(n) {
 }
 const sameText = (a, b) => words(a).join(" ") === words(b).join(" ");
 const within = (a, b) => (" " + words(b).join(" ") + " ").includes(" " + words(a).join(" ") + " ");
-// On a card: the native name, and the romanisation unless the title or origin line already has it.
-function cardNames(n, title, note) {
+// On a card, under the title: the native name, and the romanization unless the title already has it.
+function cardNames(n, title) {
   if (!n || typeof n !== "object") return [];
   const out = [];
   if (n.native && !sameText(n.native, title)) out.push(nativeName(n));
-  if (n.romanized && !within(n.romanized, title) && !within(n.romanized, note || "")) out.push({ text: n.romanized });
+  if (n.romanized && !within(n.romanized, title)) out.push({ text: n.romanized, rom: true });
   return out;
 }
 // On the recipe page: all three, leaving out only one that just repeats the title.
@@ -709,9 +713,15 @@ function pageNames(n, title) {
   if (!n || typeof n !== "object") return [];
   const out = [];
   if (n.native && !sameText(n.native, title)) out.push(nativeName(n));
-  if (n.romanized && !sameText(n.romanized, title)) out.push({ text: n.romanized });
+  if (n.romanized && !sameText(n.romanized, title)) out.push({ text: n.romanized, rom: true });
   if (n.english && !sameText(n.english, title)) out.push({ text: n.english, english: true });
   return out;
+}
+// The origin line without a part that is only the romanized name, which the names line under the title shows:
+// "Xiaomi Nangua Zhou, China" under China leaves nothing; "Ô-á-tsian, Taiwan" leaves nothing under Taiwan.
+function dropRomanized(note, n) {
+  if (!note || !n || typeof n !== "object" || !n.romanized) return note;
+  return note.split(/\s*,\s*/).filter(seg => !sameText(seg, n.romanized)).join(", ");
 }
 // Meal plans come in three kinds, read from the title: the Sunday batch the others build on, week plans
 // ("Week one: …"), and day plans. A title that matches neither of the first two counts as a day plan.
@@ -1173,15 +1183,15 @@ function renderResults() {
 // on top of it are buttons of their own that filter the recipes, and the favorite star sits beside them.
 function cardHTML(r, ev, m, qw) {
   const rd = readyOf(ev);
-  const trads = tradsOf(r), note = originNote(r.origin, r.traditions || [], D.traditions);
-  const names = cardNames(r.names, r.title, note);
-  const line = [...names.map(nameHTML), note ? esc(note) : ""].filter(Boolean).join(" · ");
+  const trads = tradsOf(r), note = dropRomanized(originNote(r.origin, r.traditions || [], D.traditions), r.names);
+  const names = cardNames(r.names, r.title);
   return `<div class="cardbox"><div class="card">
       <span class="card-head">${filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
       <h3><button type="button" class="open" data-open="${r.id}">${markTitle(r.title, qw)}</button></h3>
+      ${names.length ? `<span class="names">${namesHTML(names)}</span>` : ""}
       ${tradChips(trads)}
-      ${line ? `<span class="origin">${line}</span>` : ""}
+      ${note ? `<span class="origin">${esc(note)}</span>` : ""}
       ${m ? matchLine(m, [r.origin, note, ...trads, ...names.map(x => x.text)]) : ""}
       <span class="tags">${r.tags.map(t => jobBtn(t)).join("")}</span>
     </div>${starHTML(r.id)}</div>`;
@@ -1195,7 +1205,9 @@ function filterBtn(kind, v, text, cls, name = text, title = "") {
 const jobBtn = t => filterBtn("jobs", t, t, `tag t-${t.toLowerCase()}`, t, JOB_INFO[t] || "");
 // Traditions show as chips, always right under the title. "No single tradition" gets no chip: it isn't a place to
 // filter by (the Tradition filter doesn't offer it), and By tradition still groups those recipes under it.
-const nameHTML = x => x.dir ? `<span class="native"${x.lang ? ` lang="${esc(x.lang)}"` : ""} dir="${x.dir}">${esc(x.text)}</span>` : esc(x.text);
+const nameHTML = x => x.dir ? `<span class="native"${x.lang ? ` lang="${esc(x.lang)}"` : ""} dir="${x.dir}">${esc(x.text)}</span>`
+  : x.rom ? `<span class="rom">${esc(x.text)}</span>` : esc(x.text);
+const namesHTML = names => names.map(nameHTML).join(`<span class="sep"> · </span>`);
 const tradsOf = r => (r.traditions || []).filter(t => TRADS.includes(t));
 const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
 const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => TRADS.includes(v), uses: v => Object.hasOwn(V, v) };
@@ -1340,14 +1352,15 @@ function renderSheet(r) {
   const heading = x => x.title + (x.origin ? ` (${x.origin})` : "") + (x.marks ? ` ${x.marks}` : "");
   const children = R.filter(x => x.parent === r.id && !r.variations.some(v => v.name === heading(x)));
   const parent = r.parent ? byId[r.parent] : null;
-  const note = originNote(r.origin, r.traditions || [], D.traditions), names = pageNames(r.names, r.title);
+  const names = pageNames(r.names, r.title), english = names.find(x => x.english);
+  const note = dropRomanized(originNote(r.origin, r.traditions || [], D.traditions), r.names);
   const st = statusOf(ev);
   $("sheet-page").innerHTML = `
     <div class="tags">${r.tags.map(t => jobBtn(t)).join("")}</div>
     <h2 id="sheet-title">${esc(r.title)}</h2>
+    ${names.length ? `<p class="names">${namesHTML(names)}</p>` : ""}
     ${tradChips(tradsOf(r))}
-    ${names.length ? `<p class="names">${names.map(nameHTML).join(" · ")}</p>` : ""}
-    ${note && !names.some(x => sameText(x.text, note)) ? `<p class="origin">${esc(note)}</p>` : ""}
+    ${note && !(english && within(note, english.text)) ? `<p class="origin">${esc(note)}</p>` : ""}
     <p class="status ${st.cls}" style="display:flex;gap:8px;margin:12px 0 0;font-size:14.5px"><i class="dot"></i><span>${esc(st.text)}</span></p>
     ${marks.map(m => `<p class="marks">${esc(m)}</p>`).join("")}
     ${r.lead ? `<p class="lead">${rich(r.lead, r.id)}</p>` : ""}
