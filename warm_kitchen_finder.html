@@ -548,7 +548,7 @@ const EVERYDAY = ["ghee", "olive-oil", "sesame-oil", "cooking-oil", "butter", "r
   "tamari", "miso", "lemon", "lime", "cumin", "coriander", "turmeric", "cinnamon", "cardamom", "honey", "sugar", "broth",
   "white-pepper", "fish-sauce", "cilantro", "tomatoes", "spinach", "kombu", "dried-shiitake"].filter(id => V[id]);
 const STORE = "warm-kitchen-finder-v1";
-const NO_TRAD = "No single tradition";
+const NO_TRAD = "No single tradition"; // only for groupFavs' fallback: every recipe has a chip once split
 /* @testable */
 // A lookup table with no prototype, so ids from the URL, the hash or storage ("constructor", "__proto__")
 // can't find Object.prototype's members.
@@ -606,7 +606,7 @@ function parseFilters(search, ctx) {
     jobs: new Set(list("jobs").map(s => s.toUpperCase()).filter(j => ctx.jobs.includes(j))),
     ready: ["0", "1", "2"].includes(p.get("ready")) ? p.get("ready") : "any",
     chapter: ctx.chapters.find(c => num(c) === p.get("ch")) || "",
-    trad: ctx.trads.includes(p.get("trad")) ? p.get("trad") : "",
+    trad: tradValue(p.get("trad") || "", ctx.trads),
     uses: new Set(list("uses").filter(id => Object.prototype.hasOwnProperty.call(ctx.vocab, id))),
     sort: ctx.sorts.includes(p.get("sort")) ? p.get("sort") : "best",
   };
@@ -658,7 +658,7 @@ function linkIngredients(html, ids, names, wrap) {
 }
 // The tradition a place or name stands for: a tradition itself, a part of one ("Egypt", "Ayurveda", "Swahili coast"),
 // or a synonym the book uses. "" when it isn't one of them (more specific places, like Canton or Jamaica, aren't).
-const TRAD_SYNONYMS = { scandinavia: "Nordic", "middle east": "Levant, Egypt and Maghreb" };
+const TRAD_SYNONYMS = { scandinavia: "Nordic", "middle east": "Levant" };
 function tradAliasOf(name, trads) {
   const key = name.normalize("NFC").trim().toLowerCase().replace(/^the\s+/, "");
   if (Object.prototype.hasOwnProperty.call(TRAD_SYNONYMS, key) && trads.includes(TRAD_SYNONYMS[key])) return TRAD_SYNONYMS[key];
@@ -670,11 +670,60 @@ function tradAliasOf(name, trads) {
 }
 // The book heading's origin, minus what the tradition chips already say: "China" under China goes,
 // "Xiaomi Nangua Zhou, China" keeps "Xiaomi Nangua Zhou", "Korean pumpkin porridge" and "Canton" stay.
+// Within "A / B" or "A and B", a part the chips say goes and the rest stays: "Iberia / Levant" under Levant keeps
+// "Iberia". A name that only reads as two parts ("Trinidad and Tobago") stays whole.
 function originNote(origin, traditions, trads) {
   if (!origin) return "";
-  const restates = seg => [seg, ...[seg.split(/\s*(?:\/|\band\b)\s*/)]].some(p => (Array.isArray(p) ? p : [p])
-    .every(x => traditions.includes(tradAliasOf(x, trads))));
-  return origin.split(/\s*,\s*/).filter(seg => seg && !restates(seg)).join(", ");
+  const says = x => traditions.includes(tradAliasOf(x, trads));
+  return origin.split(/\s*,\s*/).map(seg => {
+    if (!seg || says(seg)) return "";
+    const parts = seg.split(/\s*(?:\/|\band\b)\s*/).filter(Boolean);
+    const rest = parts.filter(x => !says(x));
+    return rest.length === parts.length ? seg : rest.join(" / ");
+  }).filter(Boolean).join(", ");
+}
+// Chips are single places or traditions. The book's index has a few compound traditions; each recipe in one gets the
+// parts its origin or title names ("Tom Kha (Thailand)" → Thailand, "Shakshuka (Maghreb / Levant)" → Levant and
+// Maghreb). A recipe that names none of them gets the "else" parts; a compound with no "else" stays whole, so a new
+// recipe in the book is never left without a chip. The book's "No single tradition" shows as NEUTRAL_TRAD.
+const NO_SINGLE_TRAD = "No single tradition", NEUTRAL_TRAD = "Many traditions";
+const TRAD_PARTS = {
+  "India and Ayurveda": { parts: [["India", /\bindia|\bpunjab|\bbengal|\bkerala|\bandhra|\bpatta gobhi/], ["Ayurveda", /\bayurved/]],
+    else: ["India", "Ayurveda"] },
+  "Persia and Unani": { parts: [["Persia", /\bpersia/], ["Unani", /\bunani\b/]], else: ["Persia", "Unani"] },
+  "Thailand, Vietnam and Southeast Asia": { parts: [["Thailand", /\bthai(land)?\b/], ["Vietnam", /\bvietnam/],
+    ["Southeast Asia", /\bsoutheast asia\b|\bphilippines\b|\bmyanmar\b/]], else: ["Southeast Asia"] },
+  "Levant, Egypt and Maghreb": { parts: [["Levant", /\blevant\b|\bmiddle east\b/], ["Egypt", /\begypt/], ["Maghreb", /\bmaghreb\b|\bmorocc/]] },
+  "Russia and Ukraine": { parts: [["Russia", /\bruss/], ["Ukraine", /\bukrain/]] },
+  "New England and the Atlantic": { parts: [["New England", /\bnew england\b/]], else: ["New England"] },
+};
+// A recipe's chips, from its book traditions and the text that names its places (origin and title), in vocab order.
+function splitTraditions(traditions, text, vocab) {
+  const t = fold(text || ""), out = [];
+  for (const tr of traditions || []) {
+    const c = Object.prototype.hasOwnProperty.call(TRAD_PARTS, tr) ? TRAD_PARTS[tr] : null;
+    if (!c) { out.push(tr === NO_SINGLE_TRAD ? NEUTRAL_TRAD : tr); continue; }
+    const named = c.parts.filter(([, rx]) => rx.test(t)).map(([p]) => p);
+    out.push(...(named.length ? named : c.else || [tr]));
+  }
+  const rank = x => { const i = vocab.indexOf(x); return i < 0 ? vocab.length : i; };
+  return [...new Set(out)].sort((a, b) => rank(a) - rank(b));
+}
+// The chip vocabulary in the book's index order, each compound replaced by its parts.
+function tradVocab(traditions) {
+  return [...new Set(traditions.flatMap(t => Object.prototype.hasOwnProperty.call(TRAD_PARTS, t)
+    ? TRAD_PARTS[t].parts.map(([p]) => p) : [t === NO_SINGLE_TRAD ? NEUTRAL_TRAD : t]))];
+}
+// A ?trad= value: a chip, or a compound from a link made before the split, which then means any of its parts.
+function tradValue(v, vocab) {
+  if (!v) return "";
+  if (vocab.includes(v)) return v;
+  if (v === NO_SINGLE_TRAD && vocab.includes(NEUTRAL_TRAD)) return NEUTRAL_TRAD;
+  return Object.prototype.hasOwnProperty.call(TRAD_PARTS, v) ? v : "";
+}
+function tradHit(v, trads) {
+  if (trads.includes(v)) return true;
+  return Object.prototype.hasOwnProperty.call(TRAD_PARTS, v) && TRAD_PARTS[v].parts.some(([p]) => trads.includes(p));
 }
 // Search text: lower case without accents ("Cháo cá" → "chao ca"), plus the letters NFD doesn't take apart.
 const FOLD_LETTERS = { "đ": "d", "ø": "o", "ł": "l", "æ": "ae", "œ": "oe", "ß": "ss", "ı": "i" };
@@ -743,7 +792,10 @@ const chapName = c => c.replace(/^\d+\.\s*/, "");
 const chapNum = c => (c.match(/^(\d+)\./) || [])[1] || "";
 const $ = id => document.getElementById(id);
 const chapters = []; R.forEach(r => { if (!chapters.includes(r.chapter)) chapters.push(r.chapter); });
-const TRADS = D.traditions.filter(t => t !== NO_TRAD);
+// Chips: each recipe's book traditions split into single places (r.traditions keeps them from here on; the data in
+// the page still matches the book's index).
+const TRADS = tradVocab(D.traditions);
+R.forEach(r => { r.traditions = splitTraditions(r.traditions, r.origin + " | " + r.title, TRADS); });
 const wide = matchMedia("(min-width: 901px)");
 const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -844,7 +896,7 @@ const clip = s => (s.length > 60 ? s.slice(0, 58).replace(/\s+\S*$/, "") + "…"
 function fieldsOf(r) {
   if (!r._f) {
     const item = (text, show) => ({ w: words(text), show: show || text });
-    const trads = [r.origin, ...(r.traditions || []).filter(t => t !== NO_TRAD)].filter(Boolean);
+    const trads = [r.origin, ...(r.traditions || [])].filter(Boolean);
     r._f = [
       { kind: "title", wt: 100, items: [item(r.title)] },
       { kind: "name", wt: 90, items: r.names ? [r.names.native, r.names.romanized, r.names.english].filter(x => typeof x === "string" && x).map(t => item(t)) : [] },
@@ -1074,6 +1126,8 @@ $("clear-filters").addEventListener("click", () => {
 });
 function syncControls() {
   if ($("q").value !== S.q) $("q").value = S.q;
+  // a compound from an old link isn't in the list; show it while it's the filter
+  if (S.trad && ![...$("trad").options].some(o => o.value === S.trad)) $("trad").add(new Option(S.trad, S.trad));
   $("trad").value = S.trad; $("sort").value = S.sort;
   document.querySelectorAll(".job").forEach(b => b.setAttribute("aria-pressed", S.jobs.has(b.dataset.job)));
   document.querySelectorAll("#ready-seg button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === S.ready));
@@ -1093,7 +1147,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && more.open)
 function passes(r, ev, m, qActive, skip) {
   if (skip !== "jobs") for (const j of S.jobs) if (!r.tags.includes(j)) return false;
   if (skip !== "chapter" && S.chapter && r.chapter !== S.chapter) return false;
-  if (S.trad && !(r.traditions || []).includes(S.trad)) return false;
+  if (S.trad && !tradHit(S.trad, r.traditions || [])) return false;
   for (const id of S.uses) if (!usesAll(r).has(id)) return false;
   if (!withinPantryLimit(S.ready, ev.missing.length)) return false;
   if (qActive && !m) return false;
@@ -1134,7 +1188,7 @@ function renderResults() {
   else if (S.sort === "az") list.sort((a, b) => a.title.localeCompare(b.title));
   // By tradition: the Favorites grouping, so a recipe with two traditions sits under both (only the filtered one, if any).
   const tradGroups = S.sort === "trad"
-    ? groupFavs(list, new Set(list.map(r => r.id)), "tradition", D.traditions, NO_TRAD).filter(g => !S.trad || g.key === S.trad) : null;
+    ? groupFavs(list, new Set(list.map(r => r.id)), "tradition", TRADS, NO_TRAD).filter(g => !S.trad || tradHit(S.trad, [g.key])) : null;
   listIds = tradGroups ? tradGroups.flatMap(g => g.recipes.map(r => r.id)) : list.map(r => r.id);
 
   const ready = list.filter(r => !evs.get(r.id).missing.length).length;
@@ -1183,7 +1237,7 @@ function renderResults() {
 // on top of it are buttons of their own that filter the recipes, and the favorite star sits beside them.
 function cardHTML(r, ev, m, qw) {
   const rd = readyOf(ev);
-  const trads = tradsOf(r), note = dropRomanized(originNote(r.origin, r.traditions || [], D.traditions), r.names);
+  const trads = tradsOf(r), note = dropRomanized(originNote(r.origin, r.traditions || [], TRADS), r.names);
   const names = cardNames(r.names, r.title);
   return `<div class="cardbox"><div class="card">
       <span class="card-head">${filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}
@@ -1203,14 +1257,14 @@ function filterBtn(kind, v, text, cls, name = text, title = "") {
   return `<button type="button" class="${cls}" data-filter="${kind}" data-v="${esc(v)}" aria-pressed="${filterOn(kind, v)}" aria-label="Filter by ${esc(name)}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</button>`;
 }
 const jobBtn = t => filterBtn("jobs", t, t, `tag t-${t.toLowerCase()}`, t, JOB_INFO[t] || "");
-// Traditions show as chips, always right under the title. "No single tradition" gets no chip: it isn't a place to
-// filter by (the Tradition filter doesn't offer it), and By tradition still groups those recipes under it.
+// Traditions show as chips, right under the title and the native name. Every recipe has at least one; the book's
+// "No single tradition" shows as "Many traditions".
 const nameHTML = x => x.dir ? `<span class="native"${x.lang ? ` lang="${esc(x.lang)}"` : ""} dir="${x.dir}">${esc(x.text)}</span>`
   : x.rom ? `<span class="rom">${esc(x.text)}</span>` : esc(x.text);
 const namesHTML = names => names.map(nameHTML).join(`<span class="sep"> · </span>`);
-const tradsOf = r => (r.traditions || []).filter(t => TRADS.includes(t));
+const tradsOf = r => r.traditions || [];
 const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
-const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => TRADS.includes(v), uses: v => Object.hasOwn(V, v) };
+const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => tradValue(v, TRADS) === v, uses: v => Object.hasOwn(V, v) };
 let pendingFilter = null;
 function filterFrom(kind, v) {
   if (!Object.hasOwn(FILTER_OK, kind) || !FILTER_OK[kind](v)) return;
@@ -1269,7 +1323,7 @@ function renderFavs() {
     grid.innerHTML = `<p class="no-results" style="grid-column:1/-1">No favorites yet. Tap the star on any recipe to save it here.</p>`;
     return;
   }
-  const groups = groupFavs(R, S.favs, S.favGroup, D.traditions, NO_TRAD);
+  const groups = groupFavs(R, S.favs, S.favGroup, TRADS, NO_TRAD);
   grid.innerHTML = groups.map(g => {
     const head = S.favGroup === "chapter"
       ? `<span class="num">${chapNum(g.key)}</span>${esc(chapName(g.key))}` : esc(g.key);
@@ -1353,7 +1407,7 @@ function renderSheet(r) {
   const children = R.filter(x => x.parent === r.id && !r.variations.some(v => v.name === heading(x)));
   const parent = r.parent ? byId[r.parent] : null;
   const names = pageNames(r.names, r.title), english = names.find(x => x.english);
-  const note = dropRomanized(originNote(r.origin, r.traditions || [], D.traditions), r.names);
+  const note = dropRomanized(originNote(r.origin, r.traditions || [], TRADS), r.names);
   const st = statusOf(ev);
   $("sheet-page").innerHTML = `
     <div class="tags">${r.tags.map(t => jobBtn(t)).join("")}</div>
