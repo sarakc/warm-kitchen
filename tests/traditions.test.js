@@ -62,11 +62,12 @@ test("tradAliasOf maps places and parts of tradition names to the tradition", ()
 });
 
 test("tradVocab replaces each compound tradition with its parts, in the book's order", () => {
-  assert.deepEqual([...TRADS.slice(0, 2)], ["India", "Ayurveda"]);
-  assert.deepEqual([...TRADS.slice(8, 11)], ["Thailand", "Vietnam", "Southeast Asia"]);
-  assert.deepEqual([...TRADS.slice(12, 18)], ["Persia", "Unani", "Turkey", "Levant", "Egypt", "Maghreb"]);
+  assert.deepEqual([...TRADS.slice(0, 2)], ["India", "Nepal"]);
+  assert.deepEqual([...TRADS.slice(7, 10)], ["Thailand", "Vietnam", "Southeast Asia"]);
+  assert.deepEqual([...TRADS.slice(11, 16)], ["Persia", "Turkey", "Levant", "Egypt", "Maghreb"]);
   assert.ok(TRADS.includes("Russia") && TRADS.includes("Ukraine") && TRADS.includes("New England"));
-  assert.equal(TRADS.at(-1), "Many traditions");
+  assert.deepEqual([...TRADS.slice(-2)], ["Ayurveda", "Unani"]); // healing traditions after the places
+  assert.ok(!TRADS.includes("No single tradition") && !TRADS.includes("Many traditions"));
   assert.ok(!TRADS.some(t => / and |, /.test(t)), "no compound left");
 });
 
@@ -80,6 +81,8 @@ test("splitTraditions gives each recipe the parts its origin or title names", ()
   assert.deepEqual(split(["India and Ayurveda"], "Ayurveda | Kitchari"), ["Ayurveda"]);
   assert.deepEqual(split(["India and Ayurveda"], " | Golden Milk"), ["India", "Ayurveda"]); // names neither: both
   assert.deepEqual(split(["India and Ayurveda", "Persia and Unani"], "Ayurveda / Unani | Cream of Rice"), ["Ayurveda", "Unani"]);
+  assert.deepEqual(split(["India and Ayurveda", "Nordic"], "Nordic / Ayurveda | Salmon"), ["Nordic", "Ayurveda"]); // place first
+  assert.deepEqual([...splitTraditions(["India and Ayurveda"], "Ayurveda | Kitchari", TRADS, "kitchari")], ["India", "Ayurveda"]); // PLACE_ADD
   assert.deepEqual(split(["Thailand, Vietnam and Southeast Asia"], "Myanmar | Mohinga"), ["Southeast Asia"]);
   assert.deepEqual(split(["Thailand, Vietnam and Southeast Asia"], " | Thai Ginger Shrimp Stir-fry"), ["Thailand"]);
   assert.deepEqual(split(["Thailand, Vietnam and Southeast Asia"], "Vietnamese fish congee | Cháo Cá"), ["Vietnam"]);
@@ -88,29 +91,30 @@ test("splitTraditions gives each recipe the parts its origin or title names", ()
   assert.deepEqual(split(["Russia and Ukraine"], "Russia / Ukraine | Borscht"), ["Russia", "Ukraine"]);
   assert.deepEqual(split(["New England and the Atlantic"], "New England / Atlantic | Fish Chowder"), ["New England"]);
   assert.deepEqual(split(["Nepal", "Tibet"], "Tibet and Nepal | Momo"), ["Nepal", "Tibet"]);
-  assert.deepEqual(split(["No single tradition"], " | Ghee"), ["Many traditions"]);
+  assert.deepEqual(split(["No single tradition"], " | Ghee"), []);
   // a compound recipe that names none of its parts, and has no fallback, keeps the compound rather than losing its chip
   assert.deepEqual(split(["Levant, Egypt and Maghreb"], " | Something New"), ["Levant, Egypt and Maghreb"]);
 });
 
-test("every recipe in the finder gets chips from the vocabulary, and the book's compounds never survive", () => {
+test("every recipe in the finder gets chips from the vocabulary (none only under No single tradition), and no compound survives", () => {
   const fs = require("node:fs"), path = require("node:path");
   const h = fs.readFileSync(path.join(__dirname, "..", "warm_kitchen_finder.html"), "utf8");
   const tag = '<script id="data" type="application/json">', a = h.indexOf(tag) + tag.length;
   const D = JSON.parse(h.slice(a, h.indexOf("</script>", a)));
   const { splitTraditions } = loadFinder(), vocab = tradVocab(D.traditions);
   for (const r of D.recipes) {
-    const chips = splitTraditions(r.traditions, r.origin + " | " + r.title, vocab);
-    assert.ok(chips.length >= 1, r.id);
+    const chips = splitTraditions(r.traditions, r.origin + " | " + r.title, vocab, r.id);
+    assert.ok(chips.length >= 1 || r.traditions.includes("No single tradition"), r.id);
     for (const c of chips) assert.ok(vocab.includes(c), `${r.id}: ${c}`);
   }
 });
 
-test("old ?trad= links: a compound means any of its parts, and the old no-tradition value is the neutral chip", () => {
+test("old ?trad= links: a compound means any of its parts; the old no-tradition value is dropped", () => {
   const { tradValue, tradHit, parseFilters } = loadFinder();
   assert.equal(tradValue("Persia", TRADS), "Persia");
   assert.equal(tradValue("Persia and Unani", TRADS), "Persia and Unani");
-  assert.equal(tradValue("No single tradition", TRADS), "Many traditions");
+  assert.equal(tradValue("No single tradition", TRADS), "");
+  assert.equal(tradValue("Many traditions", TRADS), "");
   assert.equal(tradValue("constructor", TRADS), "");
   assert.equal(tradValue("Atlantis", TRADS), "");
   assert.ok(tradHit("Persia and Unani", ["Unani"]) && tradHit("Persia and Unani", ["Persia", "Turkey"]));

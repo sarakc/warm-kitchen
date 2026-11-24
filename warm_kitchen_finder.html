@@ -278,6 +278,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .trad { border: 1px solid var(--line); background: none; border-radius: 3px; padding: 3px 6px; font: 500 11.5px/1.2 var(--label); color: var(--muted); }
 .trad:hover { border-color: var(--accent); color: var(--ink); }
 .trad[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+.trad.sys { font-style: italic; border-style: dashed; }
 .card .matched { display: block; font: 500 12.5px/1.45 var(--label); color: var(--muted); }
 .card .matched .label { font-size: 9.5px; color: var(--accent-ink); margin-right: 5px; }
 .card .matched .sep { color: var(--faint); }
@@ -548,7 +549,7 @@ const EVERYDAY = ["ghee", "olive-oil", "sesame-oil", "cooking-oil", "butter", "r
   "tamari", "miso", "lemon", "lime", "cumin", "coriander", "turmeric", "cinnamon", "cardamom", "honey", "sugar", "broth",
   "white-pepper", "fish-sauce", "cilantro", "tomatoes", "spinach", "kombu", "dried-shiitake"].filter(id => V[id]);
 const STORE = "warm-kitchen-finder-v1";
-const NO_TRAD = "No single tradition"; // only for groupFavs' fallback: every recipe has a chip once split
+const NO_TRAD = "No single tradition"; // groupFavs' heading for recipes with no chip
 /* @testable */
 // A lookup table with no prototype, so ids from the URL, the hash or storage ("constructor", "__proto__")
 // can't find Object.prototype's members.
@@ -685,8 +686,11 @@ function originNote(origin, traditions, trads) {
 // Chips are single places or traditions. The book's index has a few compound traditions; each recipe in one gets the
 // parts its origin or title names ("Tom Kha (Thailand)" → Thailand, "Shakshuka (Maghreb / Levant)" → Levant and
 // Maghreb). A recipe that names none of them gets the "else" parts; a compound with no "else" stays whole, so a new
-// recipe in the book is never left without a chip. The book's "No single tradition" shows as NEUTRAL_TRAD.
-const NO_SINGLE_TRAD = "No single tradition", NEUTRAL_TRAD = "Many traditions";
+// recipe in the book is never left without a chip. The book's "No single tradition" gives no chip.
+// Ayurveda and Unani are healing traditions, not places: their chips come after the place chips and look different.
+// PLACE_ADD gives a place to a dish the book files only under its tradition (Kitchari is an Indian dish).
+const NO_SINGLE_TRAD = "No single tradition", SYSTEMS = ["Ayurveda", "Unani"];
+const PLACE_ADD = { "kitchari": ["India"], "spiced-milk": ["India"], "ayurvedic-spice-blend": ["India"] };
 const TRAD_PARTS = {
   "India and Ayurveda": { parts: [["India", /\bindia|\bpunjab|\bbengal|\bkerala|\bandhra|\bpatta gobhi/], ["Ayurveda", /\bayurved/]],
     else: ["India", "Ayurveda"] },
@@ -698,27 +702,27 @@ const TRAD_PARTS = {
   "New England and the Atlantic": { parts: [["New England", /\bnew england\b/]], else: ["New England"] },
 };
 // A recipe's chips, from its book traditions and the text that names its places (origin and title), in vocab order.
-function splitTraditions(traditions, text, vocab) {
-  const t = fold(text || ""), out = [];
+function splitTraditions(traditions, text, vocab, id) {
+  const t = fold(text || ""), out = Object.prototype.hasOwnProperty.call(PLACE_ADD, id || "") ? [...PLACE_ADD[id]] : [];
   for (const tr of traditions || []) {
     const c = Object.prototype.hasOwnProperty.call(TRAD_PARTS, tr) ? TRAD_PARTS[tr] : null;
-    if (!c) { out.push(tr === NO_SINGLE_TRAD ? NEUTRAL_TRAD : tr); continue; }
+    if (!c) { if (tr !== NO_SINGLE_TRAD) out.push(tr); continue; }
     const named = c.parts.filter(([, rx]) => rx.test(t)).map(([p]) => p);
     out.push(...(named.length ? named : c.else || [tr]));
   }
   const rank = x => { const i = vocab.indexOf(x); return i < 0 ? vocab.length : i; };
-  return [...new Set(out)].sort((a, b) => rank(a) - rank(b));
+  return [...new Set(out)].sort((a, b) => SYSTEMS.includes(a) - SYSTEMS.includes(b) || rank(a) - rank(b));
 }
-// The chip vocabulary in the book's index order, each compound replaced by its parts.
+// The chip vocabulary in the book's index order, each compound replaced by its parts; places first, then SYSTEMS.
 function tradVocab(traditions) {
-  return [...new Set(traditions.flatMap(t => Object.prototype.hasOwnProperty.call(TRAD_PARTS, t)
-    ? TRAD_PARTS[t].parts.map(([p]) => p) : [t === NO_SINGLE_TRAD ? NEUTRAL_TRAD : t]))];
+  const all = [...new Set(traditions.flatMap(t => Object.prototype.hasOwnProperty.call(TRAD_PARTS, t)
+    ? TRAD_PARTS[t].parts.map(([p]) => p) : t === NO_SINGLE_TRAD ? [] : [t]))];
+  return [...all.filter(t => !SYSTEMS.includes(t)), ...all.filter(t => SYSTEMS.includes(t))];
 }
 // A ?trad= value: a chip, or a compound from a link made before the split, which then means any of its parts.
 function tradValue(v, vocab) {
   if (!v) return "";
   if (vocab.includes(v)) return v;
-  if (v === NO_SINGLE_TRAD && vocab.includes(NEUTRAL_TRAD)) return NEUTRAL_TRAD;
   return Object.prototype.hasOwnProperty.call(TRAD_PARTS, v) ? v : "";
 }
 function tradHit(v, trads) {
@@ -795,7 +799,7 @@ const chapters = []; R.forEach(r => { if (!chapters.includes(r.chapter)) chapter
 // Chips: each recipe's book traditions split into single places (r.traditions keeps them from here on; the data in
 // the page still matches the book's index).
 const TRADS = tradVocab(D.traditions);
-R.forEach(r => { r.traditions = splitTraditions(r.traditions, r.origin + " | " + r.title, TRADS); });
+R.forEach(r => { r.traditions = splitTraditions(r.traditions, r.origin + " | " + r.title, TRADS, r.id); });
 const wide = matchMedia("(min-width: 901px)");
 const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -1103,7 +1107,9 @@ jobsRow.addEventListener("click", e => {
   const j = b.dataset.job; S.jobs.has(j) ? S.jobs.delete(j) : S.jobs.add(j);
   syncControls(); renderResults();
 });
-$("trad").insertAdjacentHTML("beforeend", TRADS.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join(""));
+{ const opt = t => `<option value="${esc(t)}">${esc(t)}</option>`;
+  $("trad").insertAdjacentHTML("beforeend", `<optgroup label="Places">${TRADS.filter(t => !SYSTEMS.includes(t)).map(opt).join("")}</optgroup>` +
+    `<optgroup label="Healing traditions">${TRADS.filter(t => SYSTEMS.includes(t)).map(opt).join("")}</optgroup>`); }
 $("trad").addEventListener("change", e => { S.trad = e.target.value; renderResults(); });
 $("sort").addEventListener("change", e => { S.sort = e.target.value; renderResults(); });
 $("q").addEventListener("input", e => { S.q = e.target.value; renderResults(); });
@@ -1257,13 +1263,14 @@ function filterBtn(kind, v, text, cls, name = text, title = "") {
   return `<button type="button" class="${cls}" data-filter="${kind}" data-v="${esc(v)}" aria-pressed="${filterOn(kind, v)}" aria-label="Filter by ${esc(name)}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</button>`;
 }
 const jobBtn = t => filterBtn("jobs", t, t, `tag t-${t.toLowerCase()}`, t, JOB_INFO[t] || "");
-// Traditions show as chips, right under the title and the native name. Every recipe has at least one; the book's
-// "No single tradition" shows as "Many traditions".
+// Traditions show as chips, right under the title and the native name: places, then healing traditions (SYSTEMS).
+// A recipe the book files under "No single tradition" has none.
 const nameHTML = x => x.dir ? `<span class="native"${x.lang ? ` lang="${esc(x.lang)}"` : ""} dir="${x.dir}">${esc(x.text)}</span>`
   : x.rom ? `<span class="rom">${esc(x.text)}</span>` : esc(x.text);
 const namesHTML = names => names.map(nameHTML).join(`<span class="sep"> · </span>`);
 const tradsOf = r => r.traditions || [];
-const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
+const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => SYSTEMS.includes(t)
+  ? filterBtn("trad", t, t, "trad sys", t, "Healing tradition") : filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
 const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => tradValue(v, TRADS) === v, uses: v => Object.hasOwn(V, v) };
 let pendingFilter = null;
 function filterFrom(kind, v) {
