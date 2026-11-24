@@ -91,7 +91,8 @@ test("splitTraditions gives each recipe the parts its origin or title names", ()
   assert.deepEqual(split(["Russia and Ukraine"], "Russia / Ukraine | Borscht"), ["Russia", "Ukraine"]);
   assert.deepEqual(split(["New England and the Atlantic"], "New England / Atlantic | Fish Chowder"), ["New England"]);
   assert.deepEqual(split(["Nepal", "Tibet"], "Tibet and Nepal | Momo"), ["Nepal", "Tibet"]);
-  assert.deepEqual(split(["No single tradition"], " | Ghee"), []);
+  assert.deepEqual(split(["No single tradition"], " | Ginger Tea"), []);
+  assert.deepEqual([...splitTraditions(["No single tradition"], " | Ghee", TRADS, "ghee")], ["India"]); // PLACE_ADD
   // a compound recipe that names none of its parts, and has no fallback, keeps the compound rather than losing its chip
   assert.deepEqual(split(["Levant, Egypt and Maghreb"], " | Something New"), ["Levant, Egypt and Maghreb"]);
 });
@@ -115,6 +116,9 @@ test("old ?trad= links: a compound means any of its parts; the old no-tradition 
   assert.equal(tradValue("Persia and Unani", TRADS), "Persia and Unani");
   assert.equal(tradValue("No single tradition", TRADS), "");
   assert.equal(tradValue("Many traditions", TRADS), "");
+  // cards with no chip are found through the filter's "No particular place" entry
+  assert.equal(tradValue("No particular place", TRADS), "No particular place");
+  assert.ok(tradHit("No particular place", []) && !tradHit("No particular place", ["Ayurveda"]));
   assert.equal(tradValue("constructor", TRADS), "");
   assert.equal(tradValue("Atlantis", TRADS), "");
   assert.ok(tradHit("Persia and Unani", ["Unani"]) && tradHit("Persia and Unani", ["Persia", "Turkey"]));

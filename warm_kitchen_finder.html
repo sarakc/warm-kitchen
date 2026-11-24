@@ -549,7 +549,6 @@ const EVERYDAY = ["ghee", "olive-oil", "sesame-oil", "cooking-oil", "butter", "r
   "tamari", "miso", "lemon", "lime", "cumin", "coriander", "turmeric", "cinnamon", "cardamom", "honey", "sugar", "broth",
   "white-pepper", "fish-sauce", "cilantro", "tomatoes", "spinach", "kombu", "dried-shiitake"].filter(id => V[id]);
 const STORE = "warm-kitchen-finder-v1";
-const NO_TRAD = "No single tradition"; // groupFavs' heading for recipes with no chip
 /* @testable */
 // A lookup table with no prototype, so ids from the URL, the hash or storage ("constructor", "__proto__")
 // can't find Object.prototype's members.
@@ -689,8 +688,12 @@ function originNote(origin, traditions, trads) {
 // recipe in the book is never left without a chip. The book's "No single tradition" gives no chip.
 // Ayurveda and Unani are healing traditions, not places: their chips come after the place chips and look different.
 // PLACE_ADD gives a place to a dish the book files only under its tradition (Kitchari is an Indian dish).
-const NO_SINGLE_TRAD = "No single tradition", SYSTEMS = ["Ayurveda", "Unani"];
-const PLACE_ADD = { "kitchari": ["India"], "spiced-milk": ["India"], "ayurvedic-spice-blend": ["India"] };
+// A recipe with no chip is still found through NO_TRAD, an entry in the Tradition filter and a By tradition heading.
+// NEUTRAL_CHIP, when set ("Basics"), shows on those cards as a chip instead, and takes NO_TRAD's place.
+const NO_SINGLE_TRAD = "No single tradition", SYSTEMS = ["Ayurveda", "Unani"], NEUTRAL_CHIP = "";
+const NO_TRAD = NEUTRAL_CHIP || "No particular place";
+const PLACE_ADD = { "kitchari": ["India"], "spiced-milk": ["India"], "ayurvedic-spice-blend": ["India"], "ghee": ["India"],
+  "fish-and-kombu-broth": ["Japan"], "sweet-potato-or-kabocha-with-gomasio": ["Japan"], "teff-porridge-with-dates-and-cardamom": ["Ethiopia"] };
 const TRAD_PARTS = {
   "India and Ayurveda": { parts: [["India", /\bindia|\bpunjab|\bbengal|\bkerala|\bandhra|\bpatta gobhi/], ["Ayurveda", /\bayurved/]],
     else: ["India", "Ayurveda"] },
@@ -706,7 +709,7 @@ function splitTraditions(traditions, text, vocab, id) {
   const t = fold(text || ""), out = Object.prototype.hasOwnProperty.call(PLACE_ADD, id || "") ? [...PLACE_ADD[id]] : [];
   for (const tr of traditions || []) {
     const c = Object.prototype.hasOwnProperty.call(TRAD_PARTS, tr) ? TRAD_PARTS[tr] : null;
-    if (!c) { if (tr !== NO_SINGLE_TRAD) out.push(tr); continue; }
+    if (!c) { if (tr !== NO_SINGLE_TRAD) out.push(tr); else if (NEUTRAL_CHIP && !out.length) out.push(NEUTRAL_CHIP); continue; }
     const named = c.parts.filter(([, rx]) => rx.test(t)).map(([p]) => p);
     out.push(...(named.length ? named : c.else || [tr]));
   }
@@ -716,17 +719,17 @@ function splitTraditions(traditions, text, vocab, id) {
 // The chip vocabulary in the book's index order, each compound replaced by its parts; places first, then SYSTEMS.
 function tradVocab(traditions) {
   const all = [...new Set(traditions.flatMap(t => Object.prototype.hasOwnProperty.call(TRAD_PARTS, t)
-    ? TRAD_PARTS[t].parts.map(([p]) => p) : t === NO_SINGLE_TRAD ? [] : [t]))];
+    ? TRAD_PARTS[t].parts.map(([p]) => p) : t === NO_SINGLE_TRAD ? (NEUTRAL_CHIP ? [NEUTRAL_CHIP] : []) : [t]))];
   return [...all.filter(t => !SYSTEMS.includes(t)), ...all.filter(t => SYSTEMS.includes(t))];
 }
 // A ?trad= value: a chip, or a compound from a link made before the split, which then means any of its parts.
 function tradValue(v, vocab) {
   if (!v) return "";
-  if (vocab.includes(v)) return v;
+  if (vocab.includes(v) || v === NO_TRAD) return v;
   return Object.prototype.hasOwnProperty.call(TRAD_PARTS, v) ? v : "";
 }
 function tradHit(v, trads) {
-  if (trads.includes(v)) return true;
+  if (trads.includes(v) || (v === NO_TRAD && !trads.length)) return true;
   return Object.prototype.hasOwnProperty.call(TRAD_PARTS, v) && TRAD_PARTS[v].parts.some(([p]) => trads.includes(p));
 }
 // Search text: lower case without accents ("Cháo cá" → "chao ca"), plus the letters NFD doesn't take apart.
@@ -1109,7 +1112,8 @@ jobsRow.addEventListener("click", e => {
 });
 { const opt = t => `<option value="${esc(t)}">${esc(t)}</option>`;
   $("trad").insertAdjacentHTML("beforeend", `<optgroup label="Places">${TRADS.filter(t => !SYSTEMS.includes(t)).map(opt).join("")}</optgroup>` +
-    `<optgroup label="Healing traditions">${TRADS.filter(t => SYSTEMS.includes(t)).map(opt).join("")}</optgroup>`); }
+    `<optgroup label="Healing traditions">${TRADS.filter(t => SYSTEMS.includes(t)).map(opt).join("")}</optgroup>` +
+    (TRADS.includes(NO_TRAD) ? "" : opt(NO_TRAD))); }
 $("trad").addEventListener("change", e => { S.trad = e.target.value; renderResults(); });
 $("sort").addEventListener("change", e => { S.sort = e.target.value; renderResults(); });
 $("q").addEventListener("input", e => { S.q = e.target.value; renderResults(); });
