@@ -68,6 +68,7 @@ test("tradVocab replaces each compound tradition with its parts, in the book's o
   assert.ok(TRADS.includes("Russia") && TRADS.includes("Ukraine") && TRADS.includes("New England"));
   assert.deepEqual([...TRADS.slice(-2)], ["Ayurveda", "Unani"]); // healing traditions after the places
   assert.ok(!TRADS.includes("No single tradition") && !TRADS.includes("Many traditions"));
+  assert.equal(TRADS.at(-3), "Global"); // the book's "No single tradition", last of the places
   assert.ok(!TRADS.some(t => / and |, /.test(t)), "no compound left");
 });
 
@@ -91,13 +92,13 @@ test("splitTraditions gives each recipe the parts its origin or title names", ()
   assert.deepEqual(split(["Russia and Ukraine"], "Russia / Ukraine | Borscht"), ["Russia", "Ukraine"]);
   assert.deepEqual(split(["New England and the Atlantic"], "New England / Atlantic | Fish Chowder"), ["New England"]);
   assert.deepEqual(split(["Nepal", "Tibet"], "Tibet and Nepal | Momo"), ["Nepal", "Tibet"]);
-  assert.deepEqual(split(["No single tradition"], " | Ginger Tea"), []);
+  assert.deepEqual(split(["No single tradition"], " | Ginger Tea"), ["Global"]);
   assert.deepEqual([...splitTraditions(["No single tradition"], " | Ghee", TRADS, "ghee")], ["India"]); // PLACE_ADD
   // a compound recipe that names none of its parts, and has no fallback, keeps the compound rather than losing its chip
   assert.deepEqual(split(["Levant, Egypt and Maghreb"], " | Something New"), ["Levant, Egypt and Maghreb"]);
 });
 
-test("every recipe in the finder gets chips from the vocabulary (none only under No single tradition), and no compound survives", () => {
+test("every recipe in the finder gets chips from the vocabulary, and no compound survives", () => {
   const fs = require("node:fs"), path = require("node:path");
   const h = fs.readFileSync(path.join(__dirname, "..", "warm_kitchen_finder.html"), "utf8");
   const tag = '<script id="data" type="application/json">', a = h.indexOf(tag) + tag.length;
@@ -105,20 +106,19 @@ test("every recipe in the finder gets chips from the vocabulary (none only under
   const { splitTraditions } = loadFinder(), vocab = tradVocab(D.traditions);
   for (const r of D.recipes) {
     const chips = splitTraditions(r.traditions, r.origin + " | " + r.title, vocab, r.id);
-    assert.ok(chips.length >= 1 || r.traditions.includes("No single tradition"), r.id);
+    assert.ok(chips.length >= 1, r.id);
     for (const c of chips) assert.ok(vocab.includes(c), `${r.id}: ${c}`);
   }
 });
 
-test("old ?trad= links: a compound means any of its parts; the old no-tradition value is dropped", () => {
+test("old ?trad= links: a compound means any of its parts; the old no-tradition values mean Global", () => {
   const { tradValue, tradHit, parseFilters } = loadFinder();
   assert.equal(tradValue("Persia", TRADS), "Persia");
   assert.equal(tradValue("Persia and Unani", TRADS), "Persia and Unani");
-  assert.equal(tradValue("No single tradition", TRADS), "");
-  assert.equal(tradValue("Many traditions", TRADS), "");
-  // cards with no chip are found through the filter's "No particular place" entry
-  assert.equal(tradValue("No particular place", TRADS), "No particular place");
-  assert.ok(tradHit("No particular place", []) && !tradHit("No particular place", ["Ayurveda"]));
+  assert.equal(tradValue("No single tradition", TRADS), "Global");
+  assert.equal(tradValue("Many traditions", TRADS), "Global");
+  assert.equal(tradValue("Global", TRADS), "Global");
+  assert.ok(tradHit("Global", ["Global"]) && !tradHit("Global", ["Ayurveda"]));
   assert.equal(tradValue("constructor", TRADS), "");
   assert.equal(tradValue("Atlantis", TRADS), "");
   assert.ok(tradHit("Persia and Unani", ["Unani"]) && tradHit("Persia and Unani", ["Persia", "Turkey"]));

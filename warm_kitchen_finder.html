@@ -689,8 +689,8 @@ function originNote(origin, traditions, trads) {
 // Ayurveda and Unani are healing traditions, not places: their chips come after the place chips and look different.
 // PLACE_ADD gives a place to a dish the book files only under its tradition (Kitchari is an Indian dish).
 // A recipe with no chip is still found through NO_TRAD, an entry in the Tradition filter and a By tradition heading.
-// NEUTRAL_CHIP, when set ("Basics"), shows on those cards as a chip instead, and takes NO_TRAD's place.
-const NO_SINGLE_TRAD = "No single tradition", SYSTEMS = ["Ayurveda", "Unani"], NEUTRAL_CHIP = "";
+// NEUTRAL_CHIP, when set, shows on those cards as a chip instead and takes NO_TRAD's place ("" for no chip).
+const NO_SINGLE_TRAD = "No single tradition", SYSTEMS = ["Ayurveda", "Unani"], NEUTRAL_CHIP = "Global";
 const NO_TRAD = NEUTRAL_CHIP || "No particular place";
 const PLACE_ADD = { "kitchari": ["India"], "spiced-milk": ["India"], "ayurvedic-spice-blend": ["India"], "ghee": ["India"],
   "fish-and-kombu-broth": ["Japan"], "sweet-potato-or-kabocha-with-gomasio": ["Japan"], "teff-porridge-with-dates-and-cardamom": ["Ethiopia"] };
@@ -726,6 +726,7 @@ function tradVocab(traditions) {
 function tradValue(v, vocab) {
   if (!v) return "";
   if (vocab.includes(v) || v === NO_TRAD) return v;
+  if (NEUTRAL_CHIP && (v === NO_SINGLE_TRAD || v === "Many traditions")) return NEUTRAL_CHIP; // older links
   return Object.prototype.hasOwnProperty.call(TRAD_PARTS, v) ? v : "";
 }
 function tradHit(v, trads) {
