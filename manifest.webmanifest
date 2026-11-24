@@ -1,6 +1,7 @@
 {
   "name": "The Warm Kitchen",
   "short_name": "Warm Kitchen",
+  "id": "/warm-kitchen/warm_kitchen_finder.html",
   "start_url": "warm_kitchen_finder.html",
   "scope": "./",
   "display": "standalone",
