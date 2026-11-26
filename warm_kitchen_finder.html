@@ -141,17 +141,30 @@ a:hover { text-decoration: underline; }
 .pantry-bar { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; padding: 12px; margin: 0 0 8px;
               border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 .pantry-bar .search { flex: 1 1 240px; }
-.pantry-actions { display: flex; gap: 4px 16px; flex-wrap: wrap; align-items: center; }
-.pantry-actions .textbtn { min-height: 44px; color: var(--muted); }
-.pantry-actions .textbtn:hover { color: var(--accent-ink); }
+.pantry-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pbtn { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 0 12px; min-height: 36px;
+        font: 600 12.5px/1 var(--label); color: var(--accent-ink); cursor: pointer; }
+.pbtn:hover { background: var(--wash); }
+.pbtn:disabled { color: var(--faint); background: none; cursor: default; }
+@media (pointer: coarse) { .pbtn { min-height: 44px; } }
 .pantry-count { flex-basis: 100%; font: 500 12.5px/1.2 var(--label); color: var(--muted); font-variant-numeric: tabular-nums; margin: 0; }
 .pantry-undo { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px;
                background: var(--wash); font: 600 12.5px/1.2 var(--label); color: var(--ink); }
 .pantry-undo button { border: 0; background: none; padding: 0 4px; min-height: 36px; font: inherit; color: var(--accent-ink); text-decoration: underline; }
-.pantry-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; align-items: start; margin-top: 12px; }
-.pgroup { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
+/* Cards stack down columns like a book index, so a short card leaves no hole beside a long one. */
+.pantry-grid { columns: 250px; column-gap: 12px; margin-top: 12px; }
+.pantry-grid > .empty-note { column-span: all; }
+.pgroup { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; break-inside: avoid; margin: 0 0 12px; }
 .pgroup-head { display: flex; align-items: center; gap: 10px; padding: 4px 12px; border-bottom: 1px solid var(--line); }
 .pgroup-head h3 { font: 600 12.5px/1.3 var(--label); margin: 0; color: var(--ink); flex: 1; min-width: 0; }
+/* On phones each card folds to its header; the name is the toggle. */
+.pgroup-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; border: 0; background: none; padding: 0;
+                 font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.pgroup-toggle::before { content: "+"; width: 10px; flex: none; font: 400 16px/1 var(--label); color: var(--faint); }
+.pgroup-toggle[aria-expanded="true"]::before { content: "–"; }
+.pgroup.folded .pgroup-head { border-bottom: 0; }
+.pgroup.folded .checks { display: none; }
+.pgroup .checks label:has(input:checked) { color: var(--ink); }
 .pgroup-head .count { font: 500 11px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
 .pgroup-head .textbtn { min-height: 40px; padding: 0 2px; }
 .pgroup .checks { display: flex; flex-direction: column; padding: 4px 0; }
@@ -494,12 +507,13 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
             <button type="button" data-v="all" aria-pressed="true">All</button>
             <button type="button" data-v="have" aria-pressed="false">Have</button>
             <button type="button" data-v="missing" aria-pressed="false">Missing</button>
+            <button type="button" data-v="next" aria-pressed="false">Buy next</button>
           </div>
         </div>
         <div class="pantry-actions" role="group" aria-label="Change everything shown">
-          <button class="textbtn" id="pantry-all" type="button">Select all</button>
-          <button class="textbtn" id="pantry-none" type="button">Clear all</button>
-          <button class="textbtn" id="btn-everyday" type="button">Everyday pantry</button>
+          <button class="pbtn" id="pantry-all" type="button">Select all</button>
+          <button class="pbtn" id="pantry-none" type="button">Clear all</button>
+          <button class="pbtn" id="btn-everyday" type="button">Everyday pantry</button>
         </div>
         <p class="pantry-count" id="pantry-count" aria-live="polite"></p>
       </div>
@@ -767,18 +781,33 @@ function wordHit(q, t) {
 }
 // The pantry page. Groups of { cat, items } for the search and Show filter; items sorted by label, empty groups dropped.
 // A search word matches the start of a label word, ignoring case and accents ("creme" finds Crème fraîche).
-function visiblePantry(vocab, have, { search = "", show = "all" } = {}) {
+// "Made from the book" comes last: those are things you cook, not things you buy.
+// Show "next" (Buy next) is one group of the missing items that would make a recipe ready on their own, most recipes
+// first; `unlocks` is { id: recipes } from buyNext.
+const MADE_CAT = "Made from the book", NEXT_CAT = "Buy next";
+function visiblePantry(vocab, have, { search = "", show = "all", unlocks = {} } = {}) {
   const q = words(search), groups = [];
   vocab.forEach(v => {
     if (show === "have" && !have.has(v.id)) return;
-    if (show === "missing" && have.has(v.id)) return;
+    if ((show === "missing" || show === "next") && have.has(v.id)) return;
+    if (show === "next" && !(unlocks[v.id] > 0)) return;
     if (q.length) { const w = words(v.label); if (!q.every(t => w.some(x => x.startsWith(t)))) return; }
-    let g = groups.find(x => x.cat === v.cat);
-    if (!g) groups.push(g = { cat: v.cat, items: [] });
+    const cat = show === "next" ? NEXT_CAT : v.cat;
+    let g = groups.find(x => x.cat === cat);
+    if (!g) groups.push(g = { cat, items: [] });
     g.items.push(v);
   });
-  groups.forEach(g => g.items.sort((a, b) => a.label.localeCompare(b.label)));
+  groups.forEach(g => g.items.sort((a, b) => (show === "next" ? unlocks[b.id] - unlocks[a.id] : 0) || a.label.localeCompare(b.label)));
+  const made = groups.findIndex(g => g.cat === MADE_CAT);
+  if (made >= 0) groups.push(groups.splice(made, 1)[0]);
   return groups;
+}
+// What to buy next: for each item, how many recipes it alone would make ready (the recipes missing only it).
+// Takes each recipe's missing list.
+function buyNext(missingLists) {
+  const n = {};
+  missingLists.forEach(m => { if (m.length === 1) n[m[0]] = (n[m[0]] || 0) + 1; });
+  return n;
 }
 // The ids a bulk button acts on: exactly the ones shown.
 const bulkPantry = groups => groups.flatMap(g => g.items.map(i => i.id));
@@ -1063,31 +1092,57 @@ function renderDatalist() {
 }
 /* ---------------- pantry page ----------------
    Search and Show are view state only. A bulk button acts on what is shown and can be undone once; the next change clears it. */
-const P = { search: "", show: "all", undo: null };
+const P = { search: "", show: "all", undo: null, unlocks: {}, open: new Set() };
 const TOTAL = D.vocab.length;
 const CAT_IDS = {}; D.vocab.forEach(v => { (CAT_IDS[v.cat] = CAT_IDS[v.cat] || []).push(v.id); });
 const pantryShown = () => visiblePantry(D.vocab, S.have, P);
+const PANTRY_HINT = "Each card shows what you'd still need beyond this list.";
+const NEXT_HINT = "Each of these would make recipes ready on its own. The number is how many.";
+// On phones, with no search and Show at All, each card folds to its header until opened.
+const pantryFolds = () => !wide.matches && !P.search.trim() && P.show === "all";
 function renderPantry() {
-  const groups = pantryShown();
-  $("pantry-grid").innerHTML = groups.length ? groups.map(g => `<div class="pgroup" data-cat="${esc(g.cat)}">
-      <div class="pgroup-head"><h3>${esc(g.cat)}</h3><span class="count"></span>
+  const next = P.show === "next";
+  // Buy next counts are taken when the view is drawn; a tick doesn't reorder what's under the cursor.
+  if (next) P.unlocks = buyNext(R.map(r => evaluate(r).missing));
+  const groups = pantryShown(), folds = pantryFolds();
+  $("pantry-hint").textContent = next ? NEXT_HINT : PANTRY_HINT;
+  const row = v => {
+    const n = next ? P.unlocks[v.id] : usesCount[v.id] || 0;
+    const num = next ? `<span class="uses"><span aria-hidden="true">+${n}</span><span class="visually-hidden">, makes ${n} ready</span></span>`
+                     : `<span class="uses" title="Recipes that use it" aria-hidden="true">${n}</span>`;
+    return `<label><input type="checkbox" data-id="${v.id}"><span>${esc(v.label)}</span>${num}</label>`;
+  };
+  $("pantry-grid").innerHTML = groups.length ? groups.map((g, i) => {
+    const open = !folds || P.open.has(g.cat);
+    const name = folds ? `<button type="button" class="pgroup-toggle" aria-expanded="${open}" aria-controls="pg-${i}">${esc(g.cat)}</button>` : esc(g.cat);
+    const btns = CAT_IDS[g.cat] ? `
         <button type="button" class="textbtn" data-cat-set="select" aria-label="All in ${esc(g.cat)}">All</button>
-        <button type="button" class="textbtn" data-cat-set="clear" aria-label="None in ${esc(g.cat)}">None</button></div>
-      <div class="checks">${g.items.map(v => `<label><input type="checkbox" data-id="${v.id}">
-        <span>${esc(v.label)}</span><span class="uses" title="Recipes that use it" aria-hidden="true">${usesCount[v.id] || 0}</span></label>`).join("")}</div>
-    </div>`).join("") : `<p class="empty-note">Nothing matches.</p>`;
+        <button type="button" class="textbtn" data-cat-set="clear" aria-label="None in ${esc(g.cat)}">None</button>` : "";
+    return `<div class="pgroup${open ? "" : " folded"}" data-cat="${esc(g.cat)}">
+      <div class="pgroup-head"><h3>${name}</h3><span class="count"></span>${btns}</div>
+      <div class="checks" id="pg-${i}">${g.items.map(row).join("")}</div>
+    </div>`;
+  }).join("") : `<p class="empty-note">${next ? "No single item would make a recipe ready." : "Nothing matches."}</p>`;
   syncPantry();
 }
+wide.addEventListener("change", () => { if (!$("view-pantry").hidden) renderPantry(); });
 // Ticks, counts and the undo line follow S.have without rebuilding the grid, so a click doesn't move what's under the cursor.
 function syncPantry() {
   $("pantry-n").textContent = `${S.have.size} of ${TOTAL}`;
   document.querySelectorAll("#pantry-grid input[type=checkbox]").forEach(cb => { cb.checked = S.have.has(cb.dataset.id); });
   document.querySelectorAll("#pantry-grid .pgroup").forEach(g => {
     const ids = CAT_IDS[g.dataset.cat];
-    g.querySelector(".count").textContent = `${ids.filter(id => S.have.has(id)).length} of ${ids.length}`;
+    if (ids) g.querySelector(".count").textContent = `${ids.filter(id => S.have.has(id)).length} of ${ids.length}`;
   });
-  const shown = bulkPantry(pantryShown()).length;
+  const shownIds = bulkPantry(pantryShown()), shown = shownIds.length;
   $("pantry-count").textContent = shown === TOTAL ? `${S.have.size} of ${TOTAL} in your pantry` : `${shown} shown · ${S.have.size} of ${TOTAL} in your pantry`;
+  // A bulk button that would change nothing is off. One that turns itself off after its own click hands focus to the search.
+  const active = document.activeElement;
+  [["pantry-all", "select"], ["pantry-none", "clear"], ["btn-everyday", "everyday"]].forEach(([id, mode]) => {
+    const off = !bulkApply(S.have, shownIds, mode, EVERYDAY).n;
+    $(id).disabled = off;
+    if (off && active === $(id)) $("pantry-q").focus({ preventScroll: true });
+  });
   $("pantry-undo").hidden = !P.undo;
   $("pantry-undo-text").textContent = P.undo ? P.undo.text : "";
   $("pantry-status").textContent = P.undo ? P.undo.text : "";
@@ -1122,6 +1177,13 @@ $("pantry-grid").addEventListener("change", e => {
   setHave(next);
 });
 $("pantry-grid").addEventListener("click", e => {
+  const t = e.target.closest(".pgroup-toggle");
+  if (t) {
+    const g = t.closest(".pgroup"), open = g.classList.toggle("folded") === false;
+    if (open) P.open.add(g.dataset.cat); else P.open.delete(g.dataset.cat);
+    t.setAttribute("aria-expanded", open);
+    return;
+  }
   const b = e.target.closest("[data-cat-set]"); if (!b) return;
   const ids = [...b.closest(".pgroup").querySelectorAll("input")].map(i => i.dataset.id);
   setHave(bulkApply(S.have, ids, b.dataset.catSet, EVERYDAY).have);

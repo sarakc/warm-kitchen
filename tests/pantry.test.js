@@ -138,3 +138,27 @@ test("any pantry change clears the undo; undo restores the exact previous set on
   assert.equal(s2.undo, null);
   assert.deepEqual([...pantryUndo(s2).have].sort(), ["ginger", "salmon"]);
 });
+
+test("visiblePantry puts Made from the book last, whatever the vocab order", () => {
+  const { visiblePantry } = loadFinder();
+  const vocab = [{ id: "ghee", label: "Ghee", cat: "Made from the book" }, ...VOCAB];
+  assert.deepEqual(cats(visiblePantry(vocab, new Set(), {})), ["Spices", "Fish and shellfish", "Eggs and dairy", "Grains", "Made from the book"]);
+  assert.deepEqual(cats(visiblePantry(vocab, new Set(), { search: "ghee" })), ["Made from the book"]);
+});
+
+test("buyNext counts the recipes each item alone would make ready", () => {
+  const { buyNext } = loadFinder();
+  const n = buyNext([["salmon"], ["salmon"], ["cumin"], ["salmon", "cumin"], []]);
+  assert.deepEqual({ ...n }, { salmon: 2, cumin: 1 });
+  assert.deepEqual({ ...buyNext([]) }, {});
+});
+
+test("visiblePantry Buy next: one group of missing items that unlock something, most first, then by label", () => {
+  const { visiblePantry } = loadFinder();
+  const unlocks = { salmon: 1, cumin: 3, oats: 1, ginger: 5 };
+  const g = visiblePantry(VOCAB, new Set(["ginger"]), { show: "next", unlocks });
+  assert.deepEqual(cats(g), ["Buy next"]);
+  assert.deepEqual(ids(g), ["cumin", "oats", "salmon"]); // ginger is had; creme unlocks nothing
+  assert.deepEqual(ids(visiblePantry(VOCAB, new Set(), { show: "next", unlocks, search: "sal" })), ["salmon"]);
+  assert.equal(visiblePantry(VOCAB, new Set(), { show: "next", unlocks: {} }).length, 0);
+});
