@@ -115,8 +115,6 @@ a:hover { text-decoration: underline; }
 .textbtn { border: 0; background: none; padding: 0; min-height: 30px; font: 600 10.5px/1 var(--label); letter-spacing: .12em;
            text-transform: uppercase; color: var(--faint); }
 .textbtn:hover { color: var(--accent-ink); }
-.rail-hint { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
-@media (max-width: 900px) { .rail-hint { margin: 0; padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); } }
 /* pantry view */
 .pantry-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
 .pantry-top h2 { font: 300 28px/1.1 var(--display); margin: 0; letter-spacing: -.01em; }
@@ -362,7 +360,6 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 .no-results { padding: 40px 0; text-align: center; color: var(--muted); font: italic 400 18px/1.5 var(--display); }
 
 /* ---------- plans ---------- */
-.plans-intro { font: italic 400 18px/1.5 var(--display); color: var(--muted); max-width: 62ch; margin: 0 0 20px; }
 .plans-head { font: 300 clamp(28px, 4vw, 36px)/1.1 var(--display); margin: 0 0 8px; }
 .favs-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 0 0 20px; }
 .favs-head .plans-head { margin: 0; }
@@ -380,6 +377,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 .close:hover { color: var(--accent-ink); }
 .rlink .sd.far { border: 1.5px solid var(--accent); }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+.plans-head + .legend { margin-top: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ---------- recipe sheet ---------- */
@@ -449,11 +447,10 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
     </div>
     <div class="views" role="tablist" aria-label="View">
       <button role="tab" id="tab-recipes" aria-selected="true" aria-controls="view-recipes">Recipes <span class="n" id="n-recipes"></span></button>
-      <button role="tab" id="tab-plans" aria-selected="false" aria-controls="view-plans">Meal plans <span class="n" id="n-plans"></span></button>
+      <button role="tab" id="tab-pantry" aria-selected="false" aria-controls="view-pantry">Pantry</button>
       <button role="tab" id="tab-favs" aria-selected="false" aria-controls="view-favs">Favorites <span class="n" id="n-favs"></span></button>
-      <button role="tab" id="tab-pantry" aria-selected="false" aria-controls="view-pantry">Pantry <span class="n" id="n-pantry"></span></button>
+      <button role="tab" id="tab-plans" aria-selected="false" aria-controls="view-plans">Plans <span class="n" id="n-plans"></span></button>
     </div>
-    <p class="rail-hint rail-pad" id="rail-hint" hidden></p>
     <details class="fold" id="contents-wrap">
       <summary class="rail-label"><span>Contents</span><span class="fold-n" id="contents-state"></span></summary>
       <nav class="contents" id="contents" aria-label="Chapters"></nav>
@@ -509,7 +506,6 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
       <div class="pantry-top">
         <h2 id="pantry-title" tabindex="-1">Pantry</h2>
       </div>
-      <p class="pantry-hint" id="pantry-hint">Each card shows what you'd still need beyond this list.</p>
       <div class="pantry-bar">
         <div class="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -538,7 +534,6 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
       <details class="pantry-sync" id="sync">
         <summary>Sync <span class="sync-state" id="sync-state">off</span></summary>
         <div id="sync-off">
-          <p class="pantry-hint">Keeps this pantry and your favorites the same on each device you connect. It saves them in a private gist in your GitHub account, using a token with only the gist scope.</p>
           <p class="sync-row"><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Warm%20Kitchen%20sync" target="_blank" rel="noopener">Create a token</a></p>
           <p class="sync-row">
             <label class="visually-hidden" for="sync-token">GitHub token</label>
@@ -557,7 +552,6 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 
     <section id="view-plans" role="tabpanel" aria-labelledby="tab-plans" hidden>
       <h2 class="plans-head">Meal plans</h2>
-      <p class="plans-intro">From chapter 12, Days and Weeks: single days and whole weeks built around one Sunday batch. Each recipe shows whether your kitchen covers it.</p>
       <p class="legend"><span><i class="dot" style="background:var(--good)"></i>Ready to cook</span><span><i class="dot" style="background:var(--warn)"></i>Missing 1 or 2</span><span><i class="dot" style="border:1.5px solid var(--accent)"></i>Missing 3+</span></p>
       <div class="plans" id="plan-list"></div>
     </section>
@@ -1051,7 +1045,7 @@ const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.
 /* ---------------- state ----------------
    The kitchen lives in this browser; search and filters live in the URL so a refresh or a shared link keeps them. */
 const S = { have: new Set(), uses: new Set(), jobs: new Set(), ready: "any", chapter: "", trad: "",
-            sort: "book", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter", clock: {} };
+            sort: "book", q: "", favs: new Set(), favGroup: "chapter", clock: {} };
 const FAV_GROUPS = ["chapter", "tradition"];
 // Applies a saved object to the state; returns whether it held a kitchen.
 function applySaved(saved) {
@@ -1074,7 +1068,6 @@ function load() {
   if (applySaved(saved)) return;
   EVERYDAY.forEach(id => S.have.add(id));
   setBase(); // the starter pantry is unstamped, so a first sync doesn't let it undo removals made elsewhere
-  S.firstVisit = true;
 }
 function save() {
   S.clock = stampClock(S.clock, base, { have: S.have, favs: S.favs }, Date.now());
@@ -1313,8 +1306,6 @@ const P = { search: "", show: "all", undo: null, unlocks: {}, open: new Set() };
 const TOTAL = D.vocab.length;
 const CAT_IDS = {}; D.vocab.forEach(v => { (CAT_IDS[v.cat] = CAT_IDS[v.cat] || []).push(v.id); });
 const pantryShown = () => visiblePantry(D.vocab, S.have, P);
-const PANTRY_HINT = "Each card shows what you'd still need beyond this list.";
-const NEXT_HINT = "Each of these would make recipes ready on its own. The number is how many.";
 // On phones, with no search and Show at All, each card folds to its header until opened.
 const pantryFolds = () => !wide.matches && !P.search.trim() && P.show === "all";
 function renderPantry() {
@@ -1322,10 +1313,9 @@ function renderPantry() {
   // Buy next counts are taken when the view is drawn; a tick doesn't reorder what's under the cursor.
   if (next) P.unlocks = buyNext(LIST.map(r => evaluate(r).missing));
   const groups = pantryShown(), folds = pantryFolds();
-  $("pantry-hint").textContent = next ? NEXT_HINT : PANTRY_HINT;
   const row = v => {
     const n = next ? P.unlocks[v.id] : usesCount[v.id] || 0;
-    const num = next ? `<span class="uses"><span aria-hidden="true">+${n}</span><span class="visually-hidden">, makes ${n} ready</span></span>`
+    const num = next ? `<span class="uses" title="Recipes it would make ready"><span aria-hidden="true">+${n}</span><span class="visually-hidden">, makes ${n} ready</span></span>`
                      : `<span class="uses" title="Recipes that use it" aria-hidden="true">${n}</span>`;
     return `<label><input type="checkbox" data-id="${v.id}"><span>${esc(v.label)}</span>${num}</label>`;
   };
@@ -1345,7 +1335,6 @@ function renderPantry() {
 wide.addEventListener("change", () => { if (!$("view-pantry").hidden) renderPantry(); });
 // Ticks, counts and the undo line follow S.have without rebuilding the grid, so a click doesn't move what's under the cursor.
 function syncPantry() {
-  $("n-pantry").textContent = S.have.size;
   document.querySelectorAll("#pantry-grid input[type=checkbox]").forEach(cb => { cb.checked = S.have.has(cb.dataset.id); });
   document.querySelectorAll("#pantry-grid .pgroup").forEach(g => {
     const ids = CAT_IDS[g.dataset.cat];
@@ -1365,7 +1354,6 @@ function syncPantry() {
   $("pantry-status").textContent = P.undo ? P.undo.text : "";
 }
 function kitchenChanged() {
-  $("rail-hint").hidden = true;
   save(); syncPantry(); renderResults(); renderPlans(); renderFavs(); refreshSheet();
 }
 // Every write to S.have goes through here, so the undo is cleared (or set) in one place.
@@ -2031,8 +2019,6 @@ window.addEventListener("hashchange", route);
 load();
 readURL();
 syncControls();
-if (S.firstVisit) { $("rail-hint").hidden = false; $("rail-hint").textContent =
-  "Started from the book's everyday pantry. Remove what you're out of; each card shows what you'd still need."; }
 $("n-recipes").textContent = LIST.length;
 $("n-plans").textContent = D.plans.length;
 renderPantry(); renderResults(); renderPlans(); renderFavs(); route();

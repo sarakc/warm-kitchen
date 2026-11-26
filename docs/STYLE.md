@@ -38,7 +38,8 @@ Status colours and dots mean the same thing everywhere, always with a word besid
 ## Layout and shape
 
 - Desktop: a 300px sticky rail (views, contents) beside a flexible recipe area capped
-  around 1180px. The views are tabs, each with a count: Recipes, Meal plans, Favorites, Pantry.
+  around 1180px. The views are tabs: Recipes, Pantry, Favorites, Plans. Each collection of
+  recipes shows its count; Pantry shows none.
   Below 900px the rail becomes a stacked top section, its tabs in one row and its groups
   folded; below 700px the toolbar stacks.
 - Cards: a 1px warm border, 8px radius, white surface, no heavy shadow.
