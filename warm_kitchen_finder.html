@@ -778,18 +778,18 @@ function visiblePantry(vocab, have, { search = "", show = "all" } = {}) {
 }
 // The ids a bulk button acts on: exactly the ones shown.
 const bulkPantry = groups => groups.flatMap(g => g.items.map(i => i.id));
-// "select" ticks the ids, "clear" unticks them, "everyday" ticks those in the everyday list and unticks the rest.
+// "select" ticks the ids, "clear" unticks them, "everyday" ticks those in the everyday list and never unticks anything.
 // Only the ids given change; returns the new set and how many changed. The set passed in is left as it was.
 function bulkApply(have, ids, mode, everyday) {
   const next = new Set(have); let n = 0;
   ids.forEach(id => {
-    const want = mode === "select" ? true : mode === "clear" ? false : everyday.includes(id);
+    const want = mode === "clear" ? false : mode === "select" || everyday.includes(id) ? true : next.has(id);
     if (want !== next.has(id)) { n++; if (want) next.add(id); else next.delete(id); }
   });
   return { have: next, n };
 }
 function undoText(kind, n) {
-  return kind === "clear" ? `Cleared ${n}` : kind === "select" ? `Added ${n}` : "Set to everyday";
+  return kind === "clear" ? `Cleared ${n}` : `Added ${n}`;
 }
 // A recipe's names in its own language, from the optional r.names = { native, lang, romanized, english }.
 // The native name carries its lang (for the right glyphs) and dir (rtl for Arabic-script and Hebrew names).

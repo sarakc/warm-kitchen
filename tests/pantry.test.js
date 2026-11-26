@@ -81,8 +81,11 @@ test("bulkApply changes only the ids given and counts what changed", () => {
   const clr = bulkApply(have, ["ginger", "cumin"], "clear", []);
   assert.deepEqual([...clr.have].sort(), ["salmon", "x"]);
   assert.equal(clr.n, 1);
+  // Everyday only adds: salmon and x are ticked but not everyday, and stay ticked.
   const eve = bulkApply(have, ["ginger", "salmon", "cumin"], "everyday", ["ginger", "cumin"]);
-  assert.deepEqual([...eve.have].sort(), ["cumin", "ginger", "x"]);
+  assert.deepEqual([...eve.have].sort(), ["cumin", "ginger", "salmon", "x"]);
+  assert.equal(eve.n, 1);
+  assert.equal(bulkApply(have, ["salmon"], "everyday", ["ginger"]).n, 0);
   assert.deepEqual([...have].sort(), ["ginger", "salmon", "x"]); // input untouched
 });
 
@@ -90,5 +93,5 @@ test("undoText words", () => {
   const { undoText } = loadFinder();
   assert.equal(undoText("clear", 142), "Cleared 142");
   assert.equal(undoText("select", 12), "Added 12");
-  assert.equal(undoText("everyday", 30), "Set to everyday");
+  assert.equal(undoText("everyday", 30), "Added 30");
 });
