@@ -1,4 +1,4 @@
-// The finder's embedded data is read by the hub as well as the finder (see AGENTS.md), so its shared fields are checked here.
+// The finder's embedded data has readers besides the finder (see AGENTS.md), so its shared fields are checked here.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

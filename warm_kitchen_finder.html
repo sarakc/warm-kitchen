@@ -604,7 +604,7 @@ const JOB_INFO = {
   PHLEGM: "Transforms mucus, drip and the dampness behind them",
   CALM: "Settles a scattered nervous system",
 };
-// The starter pantry lives in the data (`everyday`), where the hub reads it too.
+// The starter pantry lives in the data (`everyday`), so other readers of the data get the same list (AGENTS.md).
 const EVERYDAY = (D.everyday || []).filter(id => V[id]);
 const STORE = "warm-kitchen-finder-v1";
 /* @testable */
@@ -928,8 +928,8 @@ function planSections(plans) {
     .filter(sec => sec.plans.length);
 }
 // A recipe's lines against a pantry (a Set of ingredient ids). A line's groups are AND, a group's alternatives OR,
-// an alternative's ids AND; only main lines count toward needed and missing. The hub's matcher
-// (hub/server/lib/matching.js) is a superset of this one and its tests check the two agree on every book recipe.
+// an alternative's ids AND; only main lines count toward needed and missing. Other readers of the data match against
+// this function (AGENTS.md), so change its results only on purpose.
 function bestAlt(group, have) {
   let best = null;
   for (const alt of group) {
@@ -955,10 +955,10 @@ function evaluateLines(lines, have) {
   }
   return { needed, got, missing, lineState };
 }
-// Sync through a private gist, in Tempo's scheme (tempo/index.html). The file is shared with the hub's pantry:
+// Sync through a private gist, in Tempo's scheme (tempo/index.html). The format is shared with Sara's private apps (AGENTS.md):
 // { app: "warm-kitchen", format: 1, updatedAt, docs }, docs keyed "have:<ingredient id>" and "fav:<recipe id>",
 // each { t, d: true } (present) or { t, del: true } (removed). Newest change wins per key; on a tie the remote copy
-// wins; keys on one side only are kept, so ids this page doesn't know (the hub's bar) pass through untouched.
+// wins; keys on one side only are kept, so ids this page doesn't know pass through untouched.
 const SYNC_FILE = "warm-kitchen-pantry.json", SYNC_TOMBSTONE_DAYS = 180;
 function mergeDocs(local, remote) {
   const out = {}, toLocal = {}; let remoteDirty = false;
@@ -1013,7 +1013,7 @@ const LIST = R.filter(r => !METHODS.has(r.id));
 // "Roast" for a dish filed under "Roast: one tray, 20–35 min"
 const methodOf = r => r.parent && METHODS.has(r.parent) ? byId[r.parent].title.split(":")[0].trim() : "";
 // Chips: each recipe's `places`, which scripts/finder-data.mjs derives from the book's traditions with the rules
-// above, so the hub shows the same chips. r.traditions holds them from here on; the data keeps the book's own list.
+// above, so every reader of the data shows the same chips. r.traditions holds them from here on; the data keeps the book's own list.
 // After changing the rules or the recipe data, run `node scripts/finder-data.mjs` (the tests fail until you do).
 const TRADS = D.places;
 R.forEach(r => { r.traditions = r.places; });
@@ -1135,7 +1135,7 @@ function applyRemote(docs) {
   for (const k of keys) {
     const m = k.match(/^(have|fav):(.+)$/); if (!m) continue;
     const set = m[1] === "have" ? have : favs, id = m[2];
-    if (m[1] === "have" && !V[id]) continue; // the hub's bar and own entries: kept in the gist, not shown here
+    if (m[1] === "have" && !V[id]) continue; // ids from other apps: kept in the gist, not shown here
     if (docs[k].del) set.delete(id); else set.add(id);
     S.clock[k] = docs[k].t;
   }

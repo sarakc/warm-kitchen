@@ -1,4 +1,4 @@
-// Pantry and favorites sync: the pure parts (the format is shared with the hub; see mergeDocs in the finder).
+// Pantry and favorites sync: the pure parts (the format is shared with other apps; see mergeDocs in the finder).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadFinder } = require("./load.js");
@@ -11,7 +11,7 @@ test("newest change wins per key; a tie goes to the remote copy; one-sided keys 
   const { out, toLocal, remoteDirty } = plain(mergeDocs(local, remote));
   assert.deepEqual(out["have:rice"], { t: 5, d: true });
   assert.deepEqual(out["have:miso"], { t: 2, d: true });
-  assert.deepEqual(out["have:gin"], { t: 9, d: true }); // a hub-only id passes through
+  assert.deepEqual(out["have:gin"], { t: 9, d: true }); // an id from another app passes through
   assert.deepEqual(out["have:lime"], { t: 2, del: true });
   assert.deepEqual(out["fav:ghee"], { t: 3, d: true });
   assert.deepEqual(Object.keys(toLocal).sort(), ["have:gin", "have:lime", "have:miso"]);

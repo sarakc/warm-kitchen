@@ -1,7 +1,7 @@
 // The finder's embedded data (<script id="data"> in warm_kitchen_finder.html): read, derive, write.
 //
 // The data mirrors the book. Two kinds of field are derived from it here, so that every reader (the finder,
-// the hub) gets the same values without re-running the finder's rules:
+// Sara's private apps) gets the same values without re-running the finder's rules:
 //   - `places` on each recipe: its tradition chips (single places, then healing traditions), from the book's
 //     traditions, origin and title through the finder's splitTraditions rules (TRAD_PARTS, PLACE_ADD).
 //   - top-level `places` (the chip vocabulary in index order) and `healing` (the chips that are healing

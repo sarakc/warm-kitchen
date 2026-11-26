@@ -14,7 +14,14 @@ The Warm Kitchen cookbook and its recipe finder, served by GitHub Pages from `ma
 - **The finder** (`warm_kitchen_finder.html`) is one self-contained page with the recipe
   data embedded as JSON in `<script id="data">`. Its titles, pantry and recipes follow the
   book. Edit it here, commit and push.
+  `scripts/finder-data.mjs` keeps the data's derived fields (tradition chips) current.
+- **Sync:** the Pantry page's Sync section keeps the pantry and favorites in a private gist
+  in your GitHub account (a token with only the gist scope; Tempo's works), so connected
+  devices share one pantry. Without it, each browser keeps its own.
 
-Run the sync locally with `node scripts/update-cookbook.mjs` (Node 20+, no dependencies).
+Agents: see [AGENTS.md](AGENTS.md).
+
+Run the cookbook export locally with `node scripts/update-cookbook.mjs`, and the tests with
+`node --test tests/*.test.js` (Node 20+, no dependencies).
 
 `_local/` is ignored by git and holds older local copies.
