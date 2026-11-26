@@ -38,6 +38,5 @@ file. Their tests check them against this repo, but a change here can still brea
 - Tests: `node --test tests/*.test.js` (Node 20+, no dependencies). Pure functions in the
   finder sit between `/* @testable */` and `/* @end-testable */`; `tests/load.js` exports them.
 - The finder works offline through `sw.js`; bump `CACHE` there when its `FILES` list changes.
-- Interface: minimal and quiet, bordered cards, the cookbook's tokens and fonts. Plain labels,
-  no marketing copy.
+- Interface: the look and the words are in [docs/STYLE.md](docs/STYLE.md).
 - Google Doc edits waiting to be made are in [docs/google-doc-edits.md](docs/google-doc-edits.md).
