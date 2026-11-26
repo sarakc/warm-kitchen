@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const EXPORTS = ["dict", "cleanFavs", "knownFavs", "groupFavs", "withinPantryLimit", "pantryStatus",
   "parseFilters", "filterQuery", "methodIds", "ingSuggest", "toggleFilter", "linkIngredients",
   "originNote", "tradAliasOf", "splitTraditions", "tradVocab", "tradValue", "tradHit", "cardNames", "pageNames", "dropRomanized", "fold", "words", "wordHit", "planKind", "planSections",
-  "evaluateLines", "visiblePantry", "buyNext", "bulkPantry", "bulkApply", "undoText", "pantryChange", "pantryUndo"];
+  "evaluateLines", "mergeDocs", "remoteDocs", "localDocs", "stampClock", "visiblePantry", "buyNext", "bulkPantry", "bulkApply", "undoText", "pantryChange", "pantryUndo"];
 
 // The page has two <script> tags: the first is the recipe JSON, the last is the app.
 function scriptSource() {

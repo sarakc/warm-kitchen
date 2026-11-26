@@ -140,6 +140,14 @@ a:hover { text-decoration: underline; }
 .pantry-count { flex-basis: 100%; font: 500 12.5px/1.2 var(--label); color: var(--muted); font-variant-numeric: tabular-nums; margin: 0; }
 .pantry-undo { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px;
                background: var(--wash); font: 600 12.5px/1.2 var(--label); color: var(--ink); }
+.pantry-sync { margin: 28px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.pantry-sync summary { font: 600 12.5px/1.2 var(--label); color: var(--muted); cursor: pointer; padding: 8px 0; }
+.pantry-sync .sync-state { font-weight: 500; }
+.pantry-sync .pantry-hint { margin: 6px 0 10px; max-width: 60ch; }
+.sync-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; font-size: 14px; }
+.sync-row a { color: var(--accent-ink); }
+.sync-row input { flex: 1 1 220px; max-width: 340px; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px;
+                  background: var(--surface); color: var(--ink); font: inherit; }
 .pantry-undo button { border: 0; background: none; padding: 0 4px; min-height: 36px; font: inherit; color: var(--accent-ink); text-decoration: underline; }
 /* Cards stack down columns like a book index, so a short card leaves no hole beside a long one. */
 .pantry-grid { columns: 250px; column-gap: 12px; margin-top: 12px; }
@@ -522,6 +530,24 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
       <p class="visually-hidden" id="pantry-status" role="status"></p>
       <p class="pantry-undo" id="pantry-undo" hidden><span id="pantry-undo-text"></span> · <button type="button" id="pantry-undo-btn">Undo</button></p>
       <div class="pantry-grid" id="pantry-grid"></div>
+      <details class="pantry-sync" id="sync">
+        <summary>Sync <span class="sync-state" id="sync-state">off</span></summary>
+        <div id="sync-off">
+          <p class="pantry-hint">Keeps this pantry and your favorites the same on each device you connect. It saves them in a private gist in your GitHub account, using a token with only the gist scope.</p>
+          <p class="sync-row"><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Warm%20Kitchen%20sync" target="_blank" rel="noopener">Create a token</a></p>
+          <p class="sync-row">
+            <label class="visually-hidden" for="sync-token">GitHub token</label>
+            <input id="sync-token" type="password" placeholder="Token" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <button class="pbtn" id="sync-connect" type="button">Connect</button>
+            <button class="pbtn" id="sync-tempo" type="button" hidden>Use Tempo's token</button>
+          </p>
+        </div>
+        <p class="sync-row" id="sync-on" hidden>
+          <button class="pbtn" id="sync-now" type="button">Sync now</button>
+          <button class="pbtn" id="sync-disconnect" type="button">Turn off</button>
+        </p>
+        <p class="pantry-hint" id="sync-msg" role="status"></p>
+      </details>
     </section>
 
     <section id="view-plans" role="tabpanel" aria-labelledby="tab-plans" hidden>
@@ -929,6 +955,51 @@ function evaluateLines(lines, have) {
   }
   return { needed, got, missing, lineState };
 }
+// Sync through a private gist, in Tempo's scheme (tempo/index.html). The file is shared with the hub's pantry:
+// { app: "warm-kitchen", format: 1, updatedAt, docs }, docs keyed "have:<ingredient id>" and "fav:<recipe id>",
+// each { t, d: true } (present) or { t, del: true } (removed). Newest change wins per key; on a tie the remote copy
+// wins; keys on one side only are kept, so ids this page doesn't know (the hub's bar) pass through untouched.
+const SYNC_FILE = "warm-kitchen-pantry.json", SYNC_TOMBSTONE_DAYS = 180;
+function mergeDocs(local, remote) {
+  const out = {}, toLocal = {}; let remoteDirty = false;
+  const same = (a, b) => !!a.del === !!b.del;
+  for (const k of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+    const L = local[k], R = remote[k];
+    if (!R) { out[k] = L; remoteDirty = true; }
+    else if (!L) { out[k] = R; toLocal[k] = R; }
+    else if ((L.t || 0) > (R.t || 0)) { out[k] = L; if (!same(L, R)) remoteDirty = true; }
+    else { out[k] = R; if (!same(L, R)) toLocal[k] = R; }
+  }
+  return { out, toLocal, remoteDirty };
+}
+// The docs in a sync file's text. Anything but a whole sync file throws: merging a failed or cut-off read as empty
+// would overwrite the gist with only this device's pantry and lose removals made elsewhere.
+function remoteDocs(txt) {
+  let o; try { o = JSON.parse(txt); } catch (e) { o = null; }
+  const docs = o && typeof o === "object" ? o.docs : null;
+  if (!docs || typeof docs !== "object" || Array.isArray(docs)) {
+    const e = new Error("Couldn't read the sync file. Nothing was changed; try again."); e.code = "badread"; throw e;
+  }
+  return docs;
+}
+// This device's docs: what it has now, plus a removal for each key the clock knows that it no longer has.
+// `clock` is { key: t } of the last change to each key; a key with no change yet has t = 0, so a first sync merges.
+function localDocs(have, favs, clock) {
+  const docs = {};
+  for (const id of have) docs["have:" + id] = { t: clock["have:" + id] || 0, d: true };
+  for (const id of favs) docs["fav:" + id] = { t: clock["fav:" + id] || 0, d: true };
+  for (const k of Object.keys(clock)) if (!docs[k] && /^(have|fav):/.test(k)) docs[k] = { t: clock[k], del: true };
+  return docs;
+}
+// Stamps `now` on each key whose presence differs between `base` and `cur` ({ have, favs } of Sets). Returns the clock.
+function stampClock(clock, base, cur, now) {
+  const out = Object.assign({}, clock);
+  for (const [kind, key] of [["have", "have:"], ["favs", "fav:"]]) {
+    for (const id of cur[kind]) if (!base[kind].has(id)) out[key + id] = now;
+    for (const id of base[kind]) if (!cur[kind].has(id)) out[key + id] = now;
+  }
+  return out;
+}
 /* @end-testable */
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -952,28 +1023,136 @@ const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.
 /* ---------------- state ----------------
    The kitchen lives in this browser; search and filters live in the URL so a refresh or a shared link keeps them. */
 const S = { have: new Set(), uses: new Set(), jobs: new Set(), ready: "any", chapter: "", trad: "",
-            sort: "book", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter" };
+            sort: "book", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter", clock: {} };
 const FAV_GROUPS = ["chapter", "tradition"];
 // Applies a saved object to the state; returns whether it held a kitchen.
 function applySaved(saved) {
   if (!saved || typeof saved !== "object") return false;
   S.favs = new Set(cleanFavs(saved.favs));
   if (FAV_GROUPS.includes(saved.favGroup)) S.favGroup = saved.favGroup;
-  if (!Array.isArray(saved.have)) return false;
+  if (saved.clock && typeof saved.clock === "object" && !Array.isArray(saved.clock)) S.clock = saved.clock;
+  if (!Array.isArray(saved.have)) { setBase(); return false; }
   S.have = new Set(saved.have.filter(id => V[id]));
+  setBase();
   return true;
 }
+// What the clock already accounts for; save() stamps whatever differs from it.
+let base = { have: new Set(), favs: new Set() };
+function setBase() { base = { have: new Set(S.have), favs: new Set(S.favs) }; }
 function load() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); }
   catch (e) { /* storage unavailable: start fresh */ }
   if (applySaved(saved)) return;
   EVERYDAY.forEach(id => S.have.add(id));
+  setBase(); // the starter pantry is unstamped, so a first sync doesn't let it undo removals made elsewhere
   S.firstVisit = true;
 }
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup })); }
+  S.clock = stampClock(S.clock, base, { have: S.have, favs: S.favs }, Date.now());
+  setBase();
+  try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup, clock: S.clock })); }
   catch (e) { /* ignore */ }
+  Sync.soon();
+}
+
+/* ---------------- sync through a private gist (see mergeDocs) ---------------- */
+const SYNC_STORE = "warm-kitchen-sync";
+const lsJSON = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
+const Sync = {
+  cfg: lsJSON(SYNC_STORE), // { token, gistId, last }
+  state: "off", err: "", busy: false, again: false, timer: 0,
+  on() { return !!(this.cfg && this.cfg.token && this.cfg.gistId); },
+  saveCfg() { try { if (this.cfg) localStorage.setItem(SYNC_STORE, JSON.stringify(this.cfg)); else localStorage.removeItem(SYNC_STORE); } catch (e) { /* ignore */ } },
+  async gh(path, opts = {}) {
+    let r;
+    try {
+      r = await fetch("https://api.github.com" + path, { cache: "no-store", method: opts.method || "GET", body: opts.body,
+        headers: Object.assign({ Accept: "application/vnd.github+json", Authorization: "Bearer " + (opts.token || this.cfg.token) },
+          opts.body ? { "Content-Type": "application/json" } : {}) });
+    } catch (e) { const err = new Error("Can't reach GitHub"); err.code = "offline"; throw err; }
+    if (!r.ok) { const err = new Error(r.status === 401 ? "GitHub didn't accept the token" : r.status === 404 ? "Not found" : "GitHub error " + r.status); err.code = r.status; throw err; }
+    return r.status === 204 ? null : r.json();
+  },
+  payload(docs) { return JSON.stringify({ app: "warm-kitchen", format: 1, updatedAt: new Date().toISOString(), docs }); },
+  create(token) {
+    return this.gh("/gists", { token, method: "POST", body: JSON.stringify({ description: "Warm Kitchen pantry sync (keep this private)",
+      public: false, files: { [SYNC_FILE]: { content: this.payload({}) } } }) });
+  },
+  async connect(token) {
+    token = String(token || "").trim(); if (!token) throw new Error("Paste a token first");
+    await this.gh("/user", { token });
+    let gist = null;
+    for (let page = 1; page <= 10 && !gist; page++) {
+      const list = await this.gh(`/gists?per_page=100&page=${page}`, { token });
+      gist = list.find(g => g.files && g.files[SYNC_FILE]) || null;
+      if (list.length < 100) break;
+    }
+    if (!gist) gist = await this.create(token);
+    this.cfg = { token, gistId: gist.id, last: null }; this.saveCfg();
+    await this.now();
+  },
+  disconnect() { clearTimeout(this.timer); this.cfg = null; this.saveCfg(); this.state = "off"; this.err = ""; syncUI(); },
+  soon(ms) { if (!this.on()) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.now(), ms ?? 2500); },
+  async now() {
+    if (!this.on()) return;
+    if (this.busy) { this.again = true; return; }
+    clearTimeout(this.timer); this.busy = true; this.state = "syncing"; syncUI();
+    try {
+      let g;
+      try { g = await this.gh("/gists/" + this.cfg.gistId); }
+      catch (e) { if (e.code !== 404) throw e; g = await this.create(); this.cfg.gistId = g.id; this.saveCfg(); } // the gist was deleted
+      const f = g.files && g.files[SYNC_FILE];
+      let remote = {};
+      if (f) {
+        let txt = f.content;
+        if (f.truncated) { // GitHub cuts files over 1 MB from the API reply; the whole file is at raw_url
+          let r; try { r = await fetch(f.raw_url, { cache: "no-store" }); } catch (e) { const err = new Error("Can't reach GitHub"); err.code = "offline"; throw err; }
+          if (!r.ok) { const err = new Error("GitHub error " + r.status); err.code = r.status; throw err; }
+          txt = await r.text();
+        }
+        remote = remoteDocs(txt); // throws on a bad read, so the gist is left alone
+      }
+      const { out, toLocal, remoteDirty } = mergeDocs(localDocs(S.have, S.favs, S.clock), remote);
+      applyRemote(toLocal);
+      const cut = Date.now() - SYNC_TOMBSTONE_DAYS * 864e5;
+      for (const k in out) if (out[k].del && out[k].t < cut) delete out[k];
+      if (remoteDirty || !f) await this.gh("/gists/" + this.cfg.gistId, { method: "PATCH", body: JSON.stringify({ files: { [SYNC_FILE]: { content: this.payload(out) } } }) });
+      for (const k in S.clock) if (!out[k] && S.clock[k] < cut) delete S.clock[k];
+      this.cfg.last = Date.now(); this.saveCfg(); this.state = "ok"; this.err = "";
+    } catch (e) {
+      this.state = e.code === "offline" ? "offline" : "error"; this.err = e.message || "Sync failed";
+    } finally {
+      this.busy = false; syncUI();
+      if (this.again) { this.again = false; this.soon(500); }
+    }
+  },
+};
+// Takes the remote side's newer changes: their times go on the clock, so they aren't stamped again as this device's.
+function applyRemote(docs) {
+  const keys = Object.keys(docs); if (!keys.length) return;
+  const have = new Set(S.have), favs = new Set(S.favs);
+  for (const k of keys) {
+    const m = k.match(/^(have|fav):(.+)$/); if (!m) continue;
+    const set = m[1] === "have" ? have : favs, id = m[2];
+    if (m[1] === "have" && !V[id]) continue; // the hub's bar and own entries: kept in the gist, not shown here
+    if (docs[k].del) set.delete(id); else set.add(id);
+    S.clock[k] = docs[k].t;
+  }
+  S.have = have; S.favs = favs; setBase();
+  try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup, clock: S.clock })); }
+  catch (e) { /* ignore */ }
+  P.undo = null; renderPantry(); renderResults(); renderPlans(); favsChanged(); refreshSheet();
+}
+const agoText = t => { if (!t) return "not yet"; const s = (Date.now() - t) / 1000;
+  return s < 45 ? "just now" : s < 3600 ? Math.round(s / 60) + " min ago" : s < 86400 ? Math.round(s / 3600) + " h ago" : new Date(t).toLocaleDateString(); };
+function syncUI() {
+  const on = Sync.on();
+  $("sync-state").textContent = !on ? "off" : Sync.state === "syncing" ? "· syncing" : Sync.state === "offline" ? "· offline"
+    : Sync.state === "error" ? "· didn't sync" : "· synced " + agoText(Sync.cfg.last);
+  $("sync-off").hidden = on; $("sync-on").hidden = !on;
+  $("sync-tempo").hidden = on || !(lsJSON("tempo.sync") || {}).token;
+  $("sync-msg").textContent = on && Sync.state === "error" ? Sync.err : on && Sync.state === "offline" ? "Will sync when you're back online." : "";
 }
 const SORTS = ["book", "best", "trad", "az"];
 let urlSearch = null; // the query string the filters were last read from or written to
@@ -1211,6 +1390,20 @@ $("pantry-edit").addEventListener("click", () => {
   focusPantry = true; location.hash = "pantry";
 });
 $("pantry-back").addEventListener("click", () => { showRecipes(); $("pantry-edit").focus(); });
+async function syncConnect(token, btn) {
+  btn.disabled = true; $("sync-msg").textContent = "Connecting…";
+  try { await Sync.connect(token); $("sync-token").value = ""; }
+  catch (e) { Sync.cfg = null; Sync.saveCfg(); $("sync-msg").textContent = e.code === 401 ? "GitHub didn't accept that token. Check you copied all of it." : (e.message || "Couldn't connect"); return; }
+  finally { btn.disabled = false; }
+  syncUI();
+}
+$("sync-connect").addEventListener("click", e => syncConnect($("sync-token").value, e.currentTarget));
+$("sync-tempo").addEventListener("click", e => syncConnect((lsJSON("tempo.sync") || {}).token, e.currentTarget));
+$("sync-now").addEventListener("click", () => Sync.now());
+$("sync-disconnect").addEventListener("click", () => Sync.disconnect());
+// Coming back to the page or online picks up changes made on other devices.
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") Sync.soon(300); });
+addEventListener("online", () => Sync.soon(300));
 // Another tab saved: take its kitchen and favorites so this tab's next save doesn't overwrite them.
 addEventListener("storage", e => {
   if (e.key !== STORE || e.newValue == null) return;
@@ -1790,6 +1983,7 @@ if (S.firstVisit) { $("rail-hint").hidden = false; $("rail-hint").textContent =
 $("n-recipes").textContent = LIST.length;
 $("n-plans").textContent = D.plans.length;
 renderPantry(); renderResults(); renderPlans(); renderFavs(); route();
+syncUI(); Sync.soon(0);
 })();
 </script>
 </body>
