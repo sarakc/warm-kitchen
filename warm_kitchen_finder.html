@@ -109,16 +109,6 @@ a:hover { text-decoration: underline; }
   .views button[aria-selected="true"] { border-bottom-color: var(--accent); }
 }
 .rail-label { font: 600 10px/1.2 var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); margin: 0; }
-.add-row { position: relative; display: flex; }
-.add-row input { flex: 1; min-width: 0; height: 44px; padding: 0 64px 0 12px; border: 1px solid var(--line); border-radius: 6px;
-                 background: var(--paper); font: 500 13.5px/1 var(--label); }
-.add-row input::placeholder { color: var(--faint); }
-.add-row input:focus { border-color: var(--accent); outline: none; }
-.add-row button { position: absolute; right: 5px; top: 5px; bottom: 5px; border: 0; border-radius: 4px; padding: 0 12px;
-                  background: var(--wash); color: var(--accent-ink); font: 600 12px/1 var(--label); }
-.add-row button:hover { background: var(--accent-soft); }
-.add-msg { font: 500 12.5px/1.4 var(--label); color: var(--accent-ink); margin: -6px 0 0; }
-.add-msg:empty { display: none; }
 .empty-note { color: var(--muted); font-style: italic; font-size: 14px; margin: 0; }
 .textbtn { border: 0; background: none; padding: 0; min-height: 30px; font: 600 10.5px/1 var(--label); letter-spacing: .12em;
            text-transform: uppercase; color: var(--faint); }
@@ -189,6 +179,7 @@ a:hover { text-decoration: underline; }
                             .fold > summary { padding: 0 clamp(16px, 4vw, 26px); min-height: 48px; }
                             .fold-n { color: var(--muted); font-weight: 600; } }
 .contents { display: flex; flex-direction: column; padding: 4px 0 0; }
+@media (max-width: 900px) { #contents-wrap { display: none; } }
 .contents button { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; border: 0;
                    border-right: 2px solid transparent; background: none; padding: 6px 26px; min-height: 32px; text-align: left;
                    font: 400 14.5px/1.3 var(--body); color: var(--muted); }
@@ -223,12 +214,15 @@ a:hover { text-decoration: underline; }
 .seg button { border: 0; background: none; border-radius: 4px; padding: 7px 10px; font: 600 11.5px/1 var(--label); color: var(--faint); white-space: nowrap; }
 .seg button:hover { color: var(--ink); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
-.filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0 0; }
+.filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }
 .jobs { display: flex; flex-wrap: wrap; gap: 5px; }
-.job { border: 0; border-radius: 3px; padding: 6px 8px; min-height: 28px; font: 600 10px/1 var(--label); letter-spacing: .1em;
+@media (min-width: 701px) { .jobs { margin-left: 6px; padding-left: 14px; border-left: 1px solid var(--line); } }
+.job { border: 0; border-radius: 3px; padding: 6px 8px; min-height: 30px; font: 600 10px/1 var(--label); letter-spacing: .1em;
        text-transform: uppercase; display: inline-flex; gap: 5px; align-items: center; }
-.job[aria-pressed="false"] { background: transparent; color: var(--faint); box-shadow: inset 0 0 0 1px var(--line); }
-.job[aria-pressed="false"]:hover { color: var(--ink); }
+/* off, a job keeps its own colour as an outline; on, it fills */
+.job[aria-pressed="false"] { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 30%, transparent); }
+.job[aria-pressed="false"]:hover { box-shadow: inset 0 0 0 1px currentColor; }
+.job[aria-pressed="true"] { box-shadow: inset 0 0 0 1px currentColor; }
 .job .n { font-weight: 500; letter-spacing: 0; opacity: .75; font-variant-numeric: tabular-nums; }
 .t-warm { background: var(--t-warm-bg); color: var(--t-warm); }
 .t-oil { background: var(--t-oil-bg); color: var(--t-oil); }
@@ -236,23 +230,34 @@ a:hover { text-decoration: underline; }
 .t-blood { background: var(--t-blood-bg); color: var(--t-blood); }
 .t-phlegm { background: var(--t-phlegm-bg); color: var(--t-phlegm); }
 .t-calm { background: var(--t-calm-bg); color: var(--t-calm); }
-.more { position: relative; margin-left: auto; }
-.more > summary { list-style: none; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-height: 32px;
-                  padding: 0 10px; border-radius: 6px; font: 600 11.5px/1 var(--label); color: var(--muted); white-space: nowrap; }
-.more > summary::-webkit-details-marker { display: none; }
-.more > summary:hover, .more[open] > summary { background: var(--wash); color: var(--ink); }
-.more .more-state { color: var(--faint); font-weight: 500; }
-.more .more-state.on { color: var(--accent-ink); font-weight: 600; }
-.more-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; width: min(320px, calc(100vw - 32px));
-              display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--surface);
-              border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); }
-.more-panel .field { display: flex; flex-direction: column; gap: 5px; }
 select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line); border-radius: 6px; background-color: var(--paper);
          font: 500 13px/1.2 var(--label); appearance: none;
          background-image: linear-gradient(45deg, transparent 50%, var(--faint) 50%), linear-gradient(135deg, var(--faint) 50%, transparent 50%);
          background-position: right 15px top 55%, right 10px top 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+/* chapter, tradition and order: native selects drawn as quiet pills; one that's set takes the accent */
+select.pill { width: auto; max-width: 100%; field-sizing: content; min-height: 32px; padding: 6px 30px 6px 12px; background-color: var(--surface);
+              font: 600 12px/1.2 var(--label); color: var(--muted); cursor: pointer; transition: border-color .15s; }
+select.pill:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--ink); }
+select.pill:focus-visible { outline-offset: 1px; }
+select.pill.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background-color: var(--accent-soft); color: var(--accent-ink);
+                 background-image: linear-gradient(45deg, transparent 50%, var(--accent) 50%), linear-gradient(135deg, var(--accent) 50%, transparent 50%); }
+@media (prefers-reduced-motion: reduce) { select.pill { transition: none; } }
+@media (pointer: coarse) { select.pill { min-height: 40px; } .job { min-height: 36px; } }
+/* "Must include" suggestions under the search box */
+.suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 6; padding: 8px 6px 6px; background: var(--surface);
+           border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); }
+.suggest .rail-label { padding: 2px 10px 6px; }
+.suggest ul { list-style: none; margin: 0; padding: 0; }
+.suggest li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 10px; border-radius: 5px;
+              font: 500 13.5px/1.2 var(--label); color: var(--ink); cursor: pointer; }
+.suggest li::before { content: "+"; color: var(--accent); font-weight: 600; margin-right: -4px; }
+.suggest li > :first-child { flex: 1; }
+.suggest li .n { font: 500 11.5px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
+.suggest li:hover, .suggest li[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
 .summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 22px 0 12px; min-height: 30px; }
-.summary #clear-filters { margin-left: auto; }
+.summary .order { margin-left: auto; display: inline-flex; align-items: center; gap: 8px;
+                  font: 600 10px/1.2 var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+.summary .ok { color: var(--good); }
 .active { display: flex; flex-wrap: wrap; gap: 6px; }
 .active:empty { display: none; }
 .fchip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--accent); background: var(--accent-soft);
@@ -273,6 +278,7 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
 .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap;
              font: 600 9.5px/1.4 var(--label); letter-spacing: .14em; text-transform: uppercase; }
 .card-head .ch { color: var(--faint); }
+.card-head .meth { color: var(--faint); font-weight: 500; }
 .ready { display: inline-flex; gap: 6px; align-items: baseline; }
 .ready .dot { width: 6px; height: 6px; margin: 0; transform: translateY(-1px); }
 .st-ready { color: var(--good); }
@@ -303,6 +309,9 @@ select { width: 100%; padding: 9px 30px 9px 10px; border: 1px solid var(--line);
          border-bottom: 1px solid var(--line); font: 400 24px/1.2 var(--display); }
 .group:first-child { margin-top: 0; }
 .group .num { font: 600 11px/1 var(--label); letter-spacing: .1em; color: var(--accent); }
+.group { border-bottom-color: color-mix(in srgb, var(--accent) 22%, var(--line)); }
+.group .gname { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; }
+.group .gname:hover { color: var(--accent-ink); }
 .group .n { margin-left: auto; font: 500 11.5px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
 .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 10px; padding-right: 36px; }
 .cardbox { position: relative; display: flex; }
@@ -444,8 +453,13 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
         <div class="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <label class="visually-hidden" for="q">Search recipes</label>
-          <input id="q" type="search" placeholder="Search recipes, ingredients, traditions" aria-keyshortcuts="/">
+          <input id="q" type="search" placeholder="Search recipes, ingredients, traditions" aria-keyshortcuts="/" autocomplete="off"
+                 role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="q-suggest-list">
           <kbd class="kbd" aria-hidden="true">/</kbd>
+          <div class="suggest" id="q-suggest" hidden>
+            <p class="rail-label" id="q-suggest-label">Must include</p>
+            <ul id="q-suggest-list" role="listbox" aria-labelledby="q-suggest-label"></ul>
+          </div>
         </div>
         <div class="pantry-filter">
           <span class="rail-label" id="ready-label">Missing from your pantry</span>
@@ -458,33 +472,21 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
         </div>
       </div>
       <div class="filterbar">
+        <select class="pill" id="chapter" aria-label="Chapter"><option value="">All chapters</option></select>
+        <select class="pill" id="trad" aria-label="Tradition"><option value="">All traditions</option></select>
         <div class="jobs" id="jobs-row" role="group" aria-label="Jobs"></div>
-        <details class="more" id="more">
-          <summary><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>More filters <span class="more-state" id="more-state"></span></summary>
-          <div class="more-panel">
-            <div class="field"><label class="rail-label" for="uses-input">Uses ingredient</label>
-              <form class="add-row" id="uses-form" autocomplete="off">
-                <input id="uses-input" list="ing-list" placeholder="Any ingredient, e.g. salmon">
-                <datalist id="ing-list"></datalist>
-                <button type="submit">Add</button>
-              </form>
-              <p class="add-msg" id="uses-msg" aria-live="polite"></p></div>
-            <div class="field"><label class="rail-label" for="trad">Tradition</label>
-              <select id="trad"><option value="">All traditions</option></select></div>
-            <div class="field"><label class="rail-label" for="sort">Sort</label>
-              <select id="sort">
-                <option value="best">Best match</option>
-                <option value="book">Book order</option>
-                <option value="trad">By tradition</option>
-                <option value="az">A to Z</option>
-              </select></div>
-          </div>
-        </details>
       </div>
       <div class="summary">
         <p id="summary" tabindex="-1"></p>
         <div class="active" id="active"></div>
         <button class="linkish" id="clear-filters" type="button">Clear filters</button>
+        <label class="order"><span>Order</span>
+          <select class="pill" id="sort">
+            <option value="book">As in the book</option>
+            <option value="best">Ready to cook first</option>
+            <option value="trad">By tradition</option>
+            <option value="az">A to Z</option>
+          </select></label>
       </div>
       <div class="grid" id="grid"></div>
     </section>
@@ -639,7 +641,7 @@ function parseFilters(search, ctx) {
     chapter: ctx.chapters.find(c => num(c) === p.get("ch")) || "",
     trad: tradValue(p.get("trad") || "", ctx.trads),
     uses: new Set(list("uses").filter(id => Object.prototype.hasOwnProperty.call(ctx.vocab, id))),
-    sort: ctx.sorts.includes(p.get("sort")) ? p.get("sort") : "best",
+    sort: ctx.sorts.includes(p.get("sort")) ? p.get("sort") : "book",
   };
 }
 function filterQuery(s) {
@@ -650,8 +652,35 @@ function filterQuery(s) {
   if (s.chapter) p.set("ch", (s.chapter.match(/^(\d+)\./) || [])[1] || "");
   if (s.trad) p.set("trad", s.trad);
   if (s.uses.size) p.set("uses", [...s.uses].join(","));
-  if (s.sort !== "best") p.set("sort", s.sort);
+  if (s.sort !== "book") p.set("sort", s.sort);
   return p.toString().replace(/%2C/g, ",");
+}
+// The book's method recipes ("Roast: one tray", "Sauté and stir-fry"…): a Variations list whose dishes are recipes of
+// their own, filed under it with parent. The finder shows those dishes as cards instead of the method, which has no
+// ingredients of its own and so would pass every pantry filter.
+function methodIds(recipes) {
+  const parents = new Set(recipes.map(r => r.parent).filter(Boolean));
+  return new Set(recipes.filter(r => r.variations.length && parents.has(r.id)).map(r => r.id));
+}
+// Ingredients to offer as "Must include" while typing a search: a name with a word starting with the text (2+ characters),
+// most-used first; other names ("tulsi" for basil) after those. Only ingredients some recipe uses.
+function ingSuggest(vocab, q, exclude, counts, max = 5) {
+  const t = fold(q.trim()).replace(/\s+/g, " ");
+  if (t.length < 2) return [];
+  const rank = name => {
+    const f = fold(name), w = words(name);
+    if (f.startsWith(t)) return 0;
+    for (let i = 1; i < w.length; i++) if (w.slice(i).join(" ").startsWith(t)) return 0;
+    return -1;
+  };
+  const hits = [];
+  for (const v of vocab) {
+    if (exclude.has(v.id) || !(counts[v.id] > 0)) continue;
+    const r = [rank(v.label), ...(v.aka || []).map(a => rank(a) < 0 ? -1 : 1)].filter(k => k >= 0);
+    if (r.length) hits.push({ v, r: Math.min(...r) });
+  }
+  hits.sort((a, b) => a.r - b.r || counts[b.v.id] - counts[a.v.id] || a.v.label.localeCompare(b.v.label));
+  return hits.slice(0, max).map(h => h.v);
 }
 // A job tag, chapter, tradition or ingredient clicked on a card or recipe: on if it was off, off if it was on.
 function toggleFilter(s, kind, v) {
@@ -880,6 +909,11 @@ const chapName = c => c.replace(/^\d+\.\s*/, "");
 const chapNum = c => (c.match(/^(\d+)\./) || [])[1] || "";
 const $ = id => document.getElementById(id);
 const chapters = []; R.forEach(r => { if (!chapters.includes(r.chapter)) chapters.push(r.chapter); });
+// The finder's cards: every recipe but the method recipes, whose variations are cards of their own (see methodIds).
+const METHODS = methodIds(R);
+const LIST = R.filter(r => !METHODS.has(r.id));
+// "Roast" for a dish filed under "Roast: one tray, 20–35 min"
+const methodOf = r => r.parent && METHODS.has(r.parent) ? byId[r.parent].title.split(":")[0].trim() : "";
 // Chips: each recipe's book traditions split into single places (r.traditions keeps them from here on; the data in
 // the page still matches the book's index).
 const TRADS = tradVocab(D.traditions);
@@ -890,7 +924,7 @@ const typing = el => el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.
 /* ---------------- state ----------------
    The kitchen lives in this browser; search and filters live in the URL so a refresh or a shared link keeps them. */
 const S = { have: new Set(), uses: new Set(), jobs: new Set(), ready: "any", chapter: "", trad: "",
-            sort: "best", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter" };
+            sort: "book", q: "", firstVisit: false, favs: new Set(), favGroup: "chapter" };
 const FAV_GROUPS = ["chapter", "tradition"];
 // Applies a saved object to the state; returns whether it held a kitchen.
 function applySaved(saved) {
@@ -913,7 +947,7 @@ function save() {
   try { localStorage.setItem(STORE, JSON.stringify({ have: [...S.have], favs: [...S.favs], favGroup: S.favGroup })); }
   catch (e) { /* ignore */ }
 }
-const SORTS = ["book", "trad", "az"];
+const SORTS = ["book", "best", "trad", "az"];
 let urlSearch = null; // the query string the filters were last read from or written to
 function readURL() {
   Object.assign(S, parseFilters(location.search, { jobs: JOBS, chapters, trads: TRADS, vocab: V, sorts: SORTS }));
@@ -992,6 +1026,7 @@ function fieldsOf(r) {
       { kind: "chapter", wt: 40, items: [chapName(r.chapter), r.section].filter(Boolean).map(t => item(t)) },
       { kind: "ingredient", wt: 30, items: [...usesAll(r)].map(id => item(V[id] ? V[id].label : id, short(id))) },
       { kind: "ingredient", wt: 20, items: r.lines.map(l => item(plain(l.text), clip(plain(l.text)))) },
+      { kind: "method", wt: 10, items: methodOf(r) ? [item(byId[r.parent].title, methodOf(r))] : [] },
       { kind: "variation", wt: 12, items: r.variations.map(v => item(v.name)) },
       { kind: "variation", wt: 4, items: r.variations.map(v => item(plain(v.text), v.name)) },
     ];
@@ -1022,7 +1057,7 @@ const HIT_LABEL = { name: "Name", ingredient: "Ingredient", tradition: "Traditio
 function matchLine(m, shown) {
   const seen = new Set(), parts = [];
   for (const h of m.hits) {
-    if (h.kind === "title" || ((h.kind === "tradition" || h.kind === "name") && shown.includes(h.show))) continue;
+    if (h.kind === "title" || h.kind === "method" || ((h.kind === "tradition" || h.kind === "name") && shown.includes(h.show))) continue;
     const k = h.kind + "|" + h.show; if (seen.has(k)) continue; seen.add(k);
     parts.push(`<span class="label">${HIT_LABEL[h.kind]}</span>${esc(h.show)}`);
   }
@@ -1049,32 +1084,6 @@ function rich(s, selfId) {
   return h;
 }
 
-/* ---------------- ingredient lookup (kitchen and "uses" filter share it) ---------------- */
-function findIng(raw, msg) {
-  const t = fold(raw.trim());
-  if (!t) return null;
-  const aka = v => (v.aka || []).map(fold);
-  let hit = D.vocab.find(v => fold(v.label) === t) || D.vocab.find(v => fold(short(v.id)) === t) ||
-    D.vocab.find(v => aka(v).includes(t));
-  if (!hit) {
-    const cands = D.vocab.filter(v => fold(v.label).includes(t) || aka(v).some(a => a.includes(t)));
-    if (cands.length === 1) hit = cands[0];
-    else if (cands.length > 1) { msg.textContent = `Several match: ${cands.slice(0, 4).map(v => short(v.id)).join(", ")}. Pick one from the list.`; return null; }
-  }
-  if (!hit) { msg.textContent = `No recipe in the book uses “${raw.trim()}”. Try another name.`; return null; }
-  msg.textContent = "";
-  return hit;
-}
-function ingForm(formId, inputId, msgId, onHit) {
-  const form = $(formId), inp = $(inputId), msg = $(msgId);
-  const go = () => { const hit = findIng(inp.value, msg); if (hit) { inp.value = ""; onHit(hit.id); } };
-  form.addEventListener("submit", e => { e.preventDefault(); go(); });
-  // picking a suggestion from the list adds it straight away
-  inp.addEventListener("input", e => {
-    if ((!e.inputType || e.inputType === "insertReplacementText") && D.vocab.some(v => v.label === inp.value)) go();
-  });
-}
-
 // What a recipe line might call an ingredient: its label, each part of a label like "Sugar, brown sugar or jaggery"
 // or "Squash or pumpkin (kabocha, butternut)", and its other names. Bare qualifiers ("fresh", "dried") don't count.
 const ING_STOP = ["fresh", "dried", "tinned", "frozen", "other", "ground", "whole", "bell", "white", "red", "green"];
@@ -1086,10 +1095,7 @@ function ingNames(id) {
 
 /* ---------------- kitchen panel ---------------- */
 const usesCount = {};
-R.forEach(r => usesAll(r).forEach(id => { usesCount[id] = (usesCount[id] || 0) + 1; }));
-function renderDatalist() {
-  $("ing-list").innerHTML = D.vocab.map(v => `<option value="${esc(v.label)}"></option>`).join("");
-}
+LIST.forEach(r => usesAll(r).forEach(id => { usesCount[id] = (usesCount[id] || 0) + 1; }));
 /* ---------------- pantry page ----------------
    Search and Show are view state only. A bulk button acts on what is shown and can be undone once; the next change clears it. */
 const P = { search: "", show: "all", undo: null, unlocks: {}, open: new Set() };
@@ -1103,7 +1109,7 @@ const pantryFolds = () => !wide.matches && !P.search.trim() && P.show === "all";
 function renderPantry() {
   const next = P.show === "next";
   // Buy next counts are taken when the view is drawn; a tick doesn't reorder what's under the cursor.
-  if (next) P.unlocks = buyNext(R.map(r => evaluate(r).missing));
+  if (next) P.unlocks = buyNext(LIST.map(r => evaluate(r).missing));
   const groups = pantryShown(), folds = pantryFolds();
   $("pantry-hint").textContent = next ? NEXT_HINT : PANTRY_HINT;
   const row = v => {
@@ -1247,45 +1253,75 @@ jobsRow.addEventListener("click", e => {
   $("trad").insertAdjacentHTML("beforeend", `<optgroup label="Places">${TRADS.filter(t => !SYSTEMS.includes(t)).map(opt).join("")}</optgroup>` +
     `<optgroup label="Healing traditions">${TRADS.filter(t => SYSTEMS.includes(t)).map(opt).join("")}</optgroup>` +
     (TRADS.includes(NO_TRAD) ? "" : opt(NO_TRAD))); }
+$("chapter").insertAdjacentHTML("beforeend", chapters.map(c => `<option value="${esc(c)}">${esc(chapName(c))}</option>`).join(""));
+$("chapter").addEventListener("change", e => { S.chapter = e.target.value; renderResults(); });
 $("trad").addEventListener("change", e => { S.trad = e.target.value; renderResults(); });
 $("sort").addEventListener("change", e => { S.sort = e.target.value; renderResults(); });
-$("q").addEventListener("input", e => { S.q = e.target.value; renderResults(); });
 $("ready-seg").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   S.ready = b.dataset.v; syncControls(); renderResults();
 });
-ingForm("uses-form", "uses-input", "uses-msg", id => { S.uses.add(id); renderResults(); });
 $("active").addEventListener("click", e => {
   const b = e.target.closest("[data-unset]"); if (!b) return;
   const k = b.dataset.unset;
-  if (k === "chapter") S.chapter = "";
-  else if (k === "trad") S.trad = "";
-  else if (k.startsWith("uses:")) S.uses.delete(k.slice(5));
+  if (k.startsWith("uses:")) S.uses.delete(k.slice(5));
   syncControls(); renderResults();
+  // the next chip, or the search box once none are left
+  ($("active").querySelector("[data-unset]") || $("q")).focus();
 });
 $("clear-filters").addEventListener("click", () => {
   S.jobs.clear(); S.ready = "any"; S.chapter = ""; S.trad = ""; S.q = ""; S.uses.clear();
-  syncControls(); renderResults();
+  syncControls(); renderResults(); $("q").focus();
 });
 function syncControls() {
   if ($("q").value !== S.q) $("q").value = S.q;
   // a compound from an old link isn't in the list; show it while it's the filter
   if (S.trad && ![...$("trad").options].some(o => o.value === S.trad)) $("trad").add(new Option(S.trad, S.trad));
-  $("trad").value = S.trad; $("sort").value = S.sort;
+  $("trad").value = S.trad; $("chapter").value = S.chapter; $("sort").value = S.sort;
+  ["trad", "chapter"].forEach(k => $(k).classList.toggle("on", !!S[k]));
   document.querySelectorAll(".job").forEach(b => b.setAttribute("aria-pressed", S.jobs.has(b.dataset.job)));
   document.querySelectorAll("#ready-seg button").forEach(x => x.setAttribute("aria-pressed", x.dataset.v === S.ready));
 }
 
-const SORT_NAMES = { best: "Best match", book: "Book order", trad: "By tradition", az: "A to Z" };
-function renderMoreState() {
-  const n = (S.trad ? 1 : 0) + S.uses.size;
-  const el = $("more-state");
-  el.textContent = "· " + (n ? n + " on" : SORT_NAMES[S.sort]);
-  el.classList.toggle("on", n > 0);
+/* ---------------- search box: "Must include" suggestions ----------------
+   A combobox: typing searches as before and lists ingredients that start with the text. Arrow keys move through them,
+   Enter or a click adds one as a "Must include" filter (?uses=), Escape closes the list. */
+const qIn = $("q"), sugBox = $("q-suggest"), sugList = $("q-suggest-list");
+let sugItems = [], sugAt = -1;
+function renderSuggest() {
+  sugItems = document.activeElement === qIn ? ingSuggest(D.vocab, S.q, S.uses, usesCount) : [];
+  if (sugAt >= sugItems.length) sugAt = -1;
+  sugBox.hidden = !sugItems.length;
+  qIn.setAttribute("aria-expanded", String(sugItems.length > 0));
+  sugList.innerHTML = sugItems.map((v, i) => `<li role="option" id="sug-${i}" data-id="${v.id}" aria-selected="${i === sugAt}">` +
+    `<span>${esc(short(v.id))}</span><span class="n">${usesCount[v.id]} recipe${usesCount[v.id] === 1 ? "" : "s"}</span></li>`).join("");
+  if (sugAt >= 0) qIn.setAttribute("aria-activedescendant", "sug-" + sugAt); else qIn.removeAttribute("aria-activedescendant");
 }
-const more = $("more");
-document.addEventListener("click", e => { if (more.open && !more.contains(e.target)) more.open = false; });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && more.open) { more.open = false; more.querySelector("summary").focus(); } });
+function closeSuggest() { sugAt = -1; sugItems = []; sugBox.hidden = true; qIn.setAttribute("aria-expanded", "false"); qIn.removeAttribute("aria-activedescendant"); }
+function pickSuggest(id) {
+  if (!Object.hasOwn(V, id)) return;
+  S.uses.add(id); S.q = ""; qIn.value = "";
+  closeSuggest(); renderResults();
+}
+qIn.addEventListener("input", () => { S.q = qIn.value; sugAt = -1; renderSuggest(); renderResults(); });
+qIn.addEventListener("focus", renderSuggest);
+qIn.addEventListener("blur", closeSuggest);
+qIn.addEventListener("keydown", e => {
+  if (e.key === "Escape" && sugItems.length) { e.preventDefault(); e.stopPropagation(); closeSuggest(); return; }
+  if (!sugItems.length && e.key === "ArrowDown") renderSuggest(); // reopens the list Escape closed
+  if (!sugItems.length) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    const n = sugItems.length;
+    sugAt = e.key === "ArrowDown" ? (sugAt + 1) % n : (sugAt <= 0 ? n - 1 : sugAt - 1);
+    renderSuggest();
+  } else if (e.key === "Enter" && sugAt >= 0) { e.preventDefault(); pickSuggest(sugItems[sugAt].id); }
+});
+// mousedown, so the box keeps focus (blur would close the list first)
+sugList.addEventListener("mousedown", e => {
+  const li = e.target.closest("[data-id]"); if (!li) return;
+  e.preventDefault(); pickSuggest(li.dataset.id);
+});
 
 function passes(r, ev, m, qActive, skip) {
   if (skip !== "jobs") for (const j of S.jobs) if (!r.tags.includes(j)) return false;
@@ -1301,17 +1337,17 @@ let listIds = [];
 function renderResults() {
   const evs = new Map(R.map(r => [r.id, evaluate(r)]));
   const qw = words(S.q), qActive = qw.length > 0, phrase = fold(S.q.trim());
-  const ms = new Map(qActive ? R.map(r => [r.id, matchOf(r, qw, phrase)]) : []);
+  const ms = new Map(qActive ? LIST.map(r => [r.id, matchOf(r, qw, phrase)]) : []);
   const ok = (r, skip) => passes(r, evs.get(r.id), ms.get(r.id), qActive, skip);
 
   // job counts reflect every other filter
-  const noJobs = R.filter(r => ok(r, "jobs"));
+  const noJobs = LIST.filter(r => ok(r, "jobs"));
   document.querySelectorAll(".job").forEach(b => {
     b.querySelector(".n").textContent = noJobs.filter(r => r.tags.includes(b.dataset.job) &&
       [...S.jobs].every(j => r.tags.includes(j))).length;
   });
   // chapter counts in the contents reflect every other filter
-  const noCh = R.filter(r => ok(r, "chapter"));
+  const noCh = LIST.filter(r => ok(r, "chapter"));
   contents.querySelectorAll("[data-ch]").forEach(b => {
     const ch = b.dataset.ch, n = ch ? noCh.filter(r => r.chapter === ch).length : noCh.length;
     b.querySelector(".n").textContent = n;
@@ -1320,14 +1356,16 @@ function renderResults() {
   });
   $("contents-state").textContent = S.chapter ? chapName(S.chapter) : "All chapters";
 
-  const list = R.filter(r => ok(r));
+  const list = LIST.filter(r => ok(r));
   const kitchenCmp = (a, b) => {
     const ea = evs.get(a.id), eb = evs.get(b.id);
     const fa = ea.needed === 0, fb = eb.needed === 0;
     if (fa !== fb) return fa - fb;
     return (ea.missing.length - eb.missing.length) || (eb.got - ea.got) || (R.indexOf(a) - R.indexOf(b));
   };
-  if (S.sort === "best") list.sort((a, b) => (qActive ? ms.get(b.id).score - ms.get(a.id).score : 0) || kitchenCmp(a, b));
+  // The book's order while browsing; while searching, its first option ranks the matches (ties keep book order).
+  if (S.sort === "book" && qActive) list.sort((a, b) => ms.get(b.id).score - ms.get(a.id).score);
+  else if (S.sort === "best") list.sort((a, b) => kitchenCmp(a, b) || (qActive ? ms.get(b.id).score - ms.get(a.id).score : 0));
   else if (S.sort === "az") list.sort((a, b) => a.title.localeCompare(b.title));
   // By tradition: the Favorites grouping, so a recipe with two traditions sits under both (only the filtered one, if any).
   const tradGroups = S.sort === "trad"
@@ -1335,16 +1373,14 @@ function renderResults() {
   listIds = tradGroups ? tradGroups.flatMap(g => g.recipes.map(r => r.id)) : list.map(r => r.id);
 
   const ready = list.filter(r => !evs.get(r.id).missing.length).length;
-  $("summary").innerHTML = (list.length !== R.length ? `<strong>${list.length} of ${R.length} recipes</strong>` : `<strong>All ${R.length} recipes</strong>`) +
-    (S.have.size ? ` · ${ready} ready with your kitchen` : "");
+  $("summary").innerHTML = (list.length !== LIST.length ? `<strong>${list.length} of ${LIST.length} recipes</strong>` : `<strong>All ${LIST.length} recipes</strong>`) +
+    (S.have.size ? ` · <span class="ok">${ready} ready</span> with your kitchen` : "");
+  $("sort").querySelector('[value="book"]').textContent = qActive ? "Best match" : "As in the book";
   const chips = [];
-  if (S.chapter) chips.push(["Chapter", chapName(S.chapter), "chapter"]);
-  if (S.trad) chips.push(["Tradition", S.trad, "trad"]);
-  S.uses.forEach(id => chips.push(["Uses", short(id), "uses:" + id]));
+  S.uses.forEach(id => chips.push(["Must include", short(id), "uses:" + id]));
   $("active").innerHTML = chips.map(([k, v, key]) => `<span class="fchip"><span class="k">${k}</span>${esc(v)}<button type="button" class="x" data-unset="${esc(key)}" aria-label="Remove filter: ${k} ${esc(v)}">×</button></span>`).join("");
   const anyFilter = S.jobs.size || S.ready !== "any" || S.chapter || S.trad || S.uses.size;
   $("clear-filters").hidden = !(anyFilter || qActive);
-  renderMoreState();
   writeURL();
   updateSheetNav();
   document.querySelectorAll("[data-filter]").forEach(b => {
@@ -1364,26 +1400,27 @@ function renderResults() {
       g.recipes.map(r => cardHTML(r, evs.get(r.id), ms.get(r.id), qw)).join("")).join("");
     return;
   }
-  const group = S.sort === "book" && !S.chapter;
+  const group = S.sort === "book" && !S.chapter && !qActive;
   let html = "", last = null;
   for (const r of list) {
     if (group && r.chapter !== last) {
       last = r.chapter;
       const n = list.filter(x => x.chapter === r.chapter).length;
-      html += `<h2 class="group"><span class="num">${chapNum(r.chapter)}</span>${esc(chapName(r.chapter))}<span class="n">${n}</span></h2>`;
+      html += `<h2 class="group"><span class="num">${chapNum(r.chapter)}</span>${filterBtn("chapter", r.chapter, chapName(r.chapter), "gname", "chapter " + chapName(r.chapter))}<span class="n">${n}</span></h2>`;
     }
-    html += cardHTML(r, evs.get(r.id), ms.get(r.id), qw);
+    html += cardHTML(r, evs.get(r.id), ms.get(r.id), qw, group);
   }
   grid.innerHTML = html;
 }
 // The title is the button that opens the recipe, stretched over the whole card; the chapter, tradition and job tags
 // on top of it are buttons of their own that filter the recipes, and the favorite star sits beside them.
-function cardHTML(r, ev, m, qw) {
+// Under a chapter heading, the card leaves the chapter out.
+function cardHTML(r, ev, m, qw, underChapter = false) {
   const rd = readyOf(ev);
   const trads = tradsOf(r), note = dropRomanized(originNote(r.origin, r.traditions || [], TRADS), r.names);
   const names = cardNames(r.names, r.title);
   return `<div class="cardbox"><div class="card">
-      <span class="card-head">${filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}
+      <span class="card-head"><span>${underChapter ? "" : filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}${methodOf(r) ? `<span class="meth">${underChapter ? "" : " · "}${esc(methodOf(r))}</span>` : ""}</span>
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
       <h3><button type="button" class="open" data-open="${r.id}">${markTitle(r.title, qw)}</button></h3>
       ${names.length ? `<span class="names">${namesHTML(names)}</span>` : ""}
@@ -1422,7 +1459,7 @@ function filterFrom(kind, v) {
     urlSearch = location.search;
     // focus the filter it changed, where it can be turned off again
     const key = kind === "uses" ? "uses:" + v : kind;
-    const f = kind === "jobs" ? document.querySelector(`.job[data-job="${v}"]`) :
+    const f = kind === "jobs" ? document.querySelector(`.job[data-job="${v}"]`) : kind === "chapter" ? $("chapter") : kind === "trad" ? $("trad") :
       [...$("active").querySelectorAll("[data-unset]")].find(b => b.dataset.unset === key);
     (f || $("summary")).focus();
   };
@@ -1746,9 +1783,9 @@ readURL();
 syncControls();
 if (S.firstVisit) { $("rail-hint").hidden = false; $("rail-hint").textContent =
   "Started from the book's everyday pantry. Remove what you're out of; each card shows what you'd still need."; }
-$("n-recipes").textContent = R.length;
+$("n-recipes").textContent = LIST.length;
 $("n-plans").textContent = D.plans.length;
-renderDatalist(); renderPantry(); renderResults(); renderPlans(); renderFavs(); route();
+renderPantry(); renderResults(); renderPlans(); renderFavs(); route();
 })();
 </script>
 </body>

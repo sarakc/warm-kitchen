@@ -3,7 +3,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const EXPORTS = ["dict", "cleanFavs", "knownFavs", "groupFavs", "withinPantryLimit", "pantryStatus",
-  "parseFilters", "filterQuery", "toggleFilter", "linkIngredients",
+  "parseFilters", "filterQuery", "methodIds", "ingSuggest", "toggleFilter", "linkIngredients",
   "originNote", "tradAliasOf", "splitTraditions", "tradVocab", "tradValue", "tradHit", "cardNames", "pageNames", "dropRomanized", "fold", "words", "wordHit", "planKind", "planSections",
   "visiblePantry", "buyNext", "bulkPantry", "bulkApply", "undoText", "pantryChange", "pantryUndo"];
 

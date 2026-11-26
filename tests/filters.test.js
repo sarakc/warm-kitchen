@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { loadFinder } = require("./load.js");
 
 const ctx = { jobs: ["WARM", "OIL", "BUILD"], chapters: ["1. Foundations", "2. Porridges"], trads: ["China", "Japan"],
-              vocab: Object.assign(Object.create(null), { ginger: {}, rice: {} }), sorts: ["book", "az"] };
+              vocab: Object.assign(Object.create(null), { ginger: {}, rice: {} }), sorts: ["book", "best", "az"] };
 const plain = s => JSON.parse(JSON.stringify({ ...s, jobs: [...s.jobs], uses: [...s.uses] }));
 
 test("parseFilters reads every filter from the query string", () => {
@@ -16,18 +16,20 @@ test("parseFilters reads every filter from the query string", () => {
 test("parseFilters drops unknown values, inherited keys included", () => {
   const { parseFilters } = loadFinder();
   assert.deepEqual(plain(parseFilters("?jobs=HOT&ready=5&ch=9&trad=constructor&uses=constructor,__proto__,ginger&sort=toString", ctx)), {
-    q: "", jobs: [], ready: "any", chapter: "", trad: "", uses: ["ginger"], sort: "best",
+    q: "", jobs: [], ready: "any", chapter: "", trad: "", uses: ["ginger"], sort: "book",
   });
 });
 
 test("filterQuery writes only what's set, and round-trips through parseFilters", () => {
   const { parseFilters, filterQuery } = loadFinder();
   const s = { q: " soup ", jobs: new Set(["WARM", "BUILD"]), ready: "any", chapter: "1. Foundations", trad: "China",
-              uses: new Set(["ginger"]), sort: "best" };
+              uses: new Set(["ginger"]), sort: "book" };
   const qs = filterQuery(s);
   assert.equal(qs, "q=soup&jobs=WARM,BUILD&ch=1&trad=China&uses=ginger");
   assert.deepEqual(plain(parseFilters("?" + qs, ctx)), { ...plain(s), q: "soup" });
-  assert.equal(filterQuery({ q: "", jobs: new Set(), ready: "any", chapter: "", trad: "", uses: new Set(), sort: "best" }), "");
+  assert.equal(filterQuery({ q: "", jobs: new Set(), ready: "any", chapter: "", trad: "", uses: new Set(), sort: "book" }), "");
+  // book order is the default, so it isn't written; the old default still is
+  assert.equal(filterQuery({ q: "", jobs: new Set(), ready: "any", chapter: "", trad: "", uses: new Set(), sort: "best" }), "sort=best");
 });
 
 test("toggleFilter turns a job, chapter, tradition or ingredient on, and off again", () => {
@@ -60,4 +62,34 @@ test("linkIngredients leaves tags and existing buttons alone", () => {
     '5 cups <button type="button" class="xref" data-open="broth">Fish and Kombu Broth</button> or [broth:dashi], <b>[onion:onions]</b>');
   assert.equal(linkIngredients('<i class="onion">x</i>', ["onion"], names, wrap), '<i class="onion">x</i>');
   assert.equal(linkIngredients("salt to taste", ["onion"], names, wrap), "salt to taste");
+});
+
+test("methodIds finds the method recipes whose variations are their own recipes", () => {
+  const { methodIds } = loadFinder();
+  const R = [
+    { id: "roast", variations: [{ name: "Carrots" }], parent: null },
+    { id: "carrots", variations: [], parent: "roast" },
+    { id: "soup", variations: [{ name: "With miso" }], parent: null }, // variations with no records of their own
+    { id: "rice", variations: [], parent: null },
+  ];
+  assert.deepEqual([...methodIds(R)], ["roast"]);
+});
+
+test("ingSuggest offers ingredients with a word starting with what's typed, most-used first", () => {
+  const { ingSuggest } = loadFinder();
+  const vocab = [
+    { id: "salmon", label: "Salmon" }, { id: "smoked-salmon", label: "Smoked salmon" },
+    { id: "salt", label: "Salt" }, { id: "basil", label: "Basil", aka: ["tulsi"] }, { id: "unused", label: "Salsify" },
+  ];
+  const counts = { salmon: 9, "smoked-salmon": 2, salt: 30, basil: 4 };
+  const ids = (q, ex = new Set()) => [...ingSuggest(vocab, q, ex, counts).map(v => v.id)];
+  assert.deepEqual(ids("sal"), ["salt", "salmon", "smoked-salmon"]);
+  assert.deepEqual(ids("salm"), ["salmon", "smoked-salmon"]);
+  assert.deepEqual(ids("Tuls"), ["basil"]);
+  // a one-off house item doesn't crowd out the everyday one
+  assert.deepEqual([...ingSuggest([{ id: "ginger-tea", label: "Ginger Tea" }, { id: "ginger", label: "Fresh ginger" }], "gin", new Set(),
+    { "ginger-tea": 1, ginger: 79 }).map(v => v.id)], ["ginger", "ginger-tea"]);
+  assert.deepEqual(ids("s"), []); // too short
+  assert.deepEqual(ids("salm", new Set(["salmon"])), ["smoked-salmon"]);
+  assert.deepEqual(ids("salsify"), []); // no recipe uses it
 });
