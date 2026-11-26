@@ -321,6 +321,18 @@ select.pill.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent
 .group .gname { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; }
 .group .gname:hover { color: var(--accent-ink); }
 .group .n { margin-left: auto; font: 500 11.5px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
+/* a method's variations: a quieter heading and lighter cards, after the chapter's full recipes */
+.subgroup { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; margin: 14px 0 -4px;
+            font: 400 17px/1.25 var(--display); color: var(--muted); }
+.subgroup .k { font: 600 9.5px/1 var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.subgroup .gname { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left; }
+.subgroup .gname:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.subgroup .n { margin-left: auto; font: 500 11.5px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
+.card.var { background: color-mix(in srgb, var(--accent) 3%, transparent); border-style: dashed;
+            border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); padding: 14px 18px 12px; gap: 4px; }
+.card.var:hover { border-color: var(--accent); }
+.card.var h3 { font-size: 18px; }
+.card.var .tags { padding-top: 6px; }
 .card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 10px; padding-right: 36px; }
 .cardbox { position: relative; display: flex; }
 .cardbox > .card { flex: 1; min-width: 0; }
@@ -687,6 +699,25 @@ function methodIds(recipes) {
   const parents = new Set(recipes.map(r => r.parent).filter(Boolean));
   return new Set(recipes.filter(r => r.variations.length && parents.has(r.id)).map(r => r.id));
 }
+// The one-line dishes from a method's Variations list ("Carrots with cumin and honey (Morocco)"), as opposed to its
+// full model recipes (Roasted Roots with Rosemary), which are filed under the method too but aren't in the list.
+function variationIds(recipes, methods) {
+  const byId = new Map(recipes.map(r => [r.id, r]));
+  return new Set(recipes.filter(r => methods.has(r.parent) &&
+    byId.get(r.parent).variations.some(v => fold(v.name).startsWith(fold(r.title)))).map(r => r.id));
+}
+// The book's order for the finder: within each chapter, the full recipes first, then the variations, method by method.
+function bookOrder(list, isVar) {
+  const out = [];
+  for (let i = 0; i < list.length;) {
+    let j = i;
+    while (j < list.length && list[j].chapter === list[i].chapter) j++;
+    const run = list.slice(i, j);
+    out.push(...run.filter(r => !isVar(r)), ...run.filter(isVar));
+    i = j;
+  }
+  return out;
+}
 // Ingredients to offer as "Must include" while typing a search: a name with a word starting with the text (2+ characters),
 // most-used first; other names ("tulsi" for basil) after those. Only ingredients some recipe uses.
 function ingSuggest(vocab, q, exclude, counts, max = 5) {
@@ -1011,7 +1042,9 @@ const chapters = []; R.forEach(r => { if (!chapters.includes(r.chapter)) chapter
 const METHODS = methodIds(R);
 const LIST = R.filter(r => !METHODS.has(r.id));
 // "Roast" for a dish filed under "Roast: one tray, 20–35 min"
-const methodOf = r => r.parent && METHODS.has(r.parent) ? byId[r.parent].title.split(":")[0].trim() : "";
+// A method by its first word ("Sauté" for "Sauté and stir-fry: one pan, 5–8 min"), for the cards filed under it.
+const methodOf = r => r.parent && METHODS.has(r.parent) ? byId[r.parent].title.split(/[\s:,]/)[0] : "";
+const VARS = variationIds(R, METHODS), isVar = r => VARS.has(r.id);
 // Chips: each recipe's `places`, which scripts/finder-data.mjs derives from the book's traditions with the rules
 // above, so every reader of the data shows the same chips. r.traditions holds them from here on; the data keeps the book's own list.
 // After changing the rules or the recipe data, run `node scripts/finder-data.mjs` (the tests fail until you do).
@@ -1564,6 +1597,8 @@ function renderResults() {
   if (S.sort === "book" && qActive) list.sort((a, b) => ms.get(b.id).score - ms.get(a.id).score);
   else if (S.sort === "best") list.sort((a, b) => kitchenCmp(a, b) || (qActive ? ms.get(b.id).score - ms.get(a.id).score : 0));
   else if (S.sort === "az") list.sort((a, b) => a.title.localeCompare(b.title));
+  const browsing = S.sort === "book" && !qActive;
+  if (browsing) list.splice(0, list.length, ...bookOrder(list, isVar));
   // By tradition: the Favorites grouping, so a recipe with two traditions sits under both (only the filtered one, if any).
   const tradGroups = S.sort === "trad"
     ? groupFavs(list, new Set(list.map(r => r.id)), "tradition", TRADS, NO_TRAD).filter(g => !S.trad || tradHit(S.trad, [g.key])) : null;
@@ -1597,27 +1632,36 @@ function renderResults() {
       g.recipes.map(r => cardHTML(r, evs.get(r.id), ms.get(r.id), qw)).join("")).join("");
     return;
   }
-  const group = S.sort === "book" && !S.chapter && !qActive;
-  let html = "", last = null;
+  // Browsing the book: a heading per chapter, and under it the variations last, under a heading per method.
+  const group = browsing && !S.chapter;
+  let html = "", last = null, lastMethod = null;
   for (const r of list) {
     if (group && r.chapter !== last) {
       last = r.chapter;
       const n = list.filter(x => x.chapter === r.chapter).length;
       html += `<h2 class="group"><span class="num">${chapNum(r.chapter)}</span>${filterBtn("chapter", r.chapter, chapName(r.chapter), "gname", "chapter " + chapName(r.chapter))}<span class="n">${n}</span></h2>`;
     }
-    html += cardHTML(r, evs.get(r.id), ms.get(r.id), qw, group);
+    const sub = browsing && isVar(r);
+    if (sub && r.parent !== lastMethod) {
+      const m = byId[r.parent], n = list.filter(x => x.parent === m.id && isVar(x)).length;
+      html += `<h3 class="subgroup"><span class="k">Variations</span><button type="button" class="gname" data-open="${m.id}" title="The method and its variations">${esc(m.title)}</button><span class="n">${n}</span></h3>`;
+    }
+    lastMethod = sub ? r.parent : null;
+    html += cardHTML(r, evs.get(r.id), ms.get(r.id), qw, group || !!S.chapter, sub);
   }
   grid.innerHTML = html;
 }
 // The title is the button that opens the recipe, stretched over the whole card; the chapter, tradition and job tags
 // on top of it are buttons of their own that filter the recipes, and the favorite star sits beside them.
-// Under a chapter heading, the card leaves the chapter out.
-function cardHTML(r, ev, m, qw, underChapter = false) {
+// Under a chapter heading or with a chapter chosen, the card leaves the chapter out; under a method's heading, the method.
+// A variation's card is a lighter one, named for its method ("Sauté variation") wherever it shows.
+function cardHTML(r, ev, m, qw, underChapter = false, underMethod = false) {
   const rd = readyOf(ev);
   const trads = tradsOf(r), note = dropRomanized(originNote(r.origin, r.traditions || [], TRADS), r.names);
   const names = cardNames(r.names, r.title);
-  return `<div class="cardbox"><div class="card">
-      <span class="card-head"><span>${underChapter ? "" : filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}${methodOf(r) ? `<span class="meth">${underChapter ? "" : " · "}${esc(methodOf(r))}</span>` : ""}</span>
+  const meth = underMethod ? "" : methodOf(r) && (methodOf(r) + (isVar(r) ? " variation" : ""));
+  return `<div class="cardbox"><div class="card${isVar(r) ? " var" : ""}">
+      <span class="card-head"><span>${underChapter ? "" : filterBtn("chapter", r.chapter, chapName(r.chapter), "ch linkbtn", "chapter " + chapName(r.chapter))}${meth ? `<span class="meth">${underChapter ? "" : " · "}${esc(meth)}</span>` : ""}</span>
         <span class="ready ${rd.cls}" title="${esc(statusOf(ev).text)}"><i class="dot"></i>${esc(rd.text)}</span></span>
       <h3><button type="button" class="open" data-open="${r.id}">${markTitle(r.title, qw)}</button></h3>
       ${names.length ? `<span class="names">${namesHTML(names)}</span>` : ""}

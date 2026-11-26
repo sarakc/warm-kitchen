@@ -57,3 +57,13 @@ All 228 recipes · 16 ready   [Must include salmon ×]   Clear filters          
 ## Left to the builder
 
 Exact spacing, colours within the tokens, and test updates (`tests/filters.test.js` default sort).
+
+## Follow-up: variations last (2026-11-26)
+
+- A method's one-line variations (the dishes in its Variations list, `variationIds`) are lighter cards: a faint
+  tint, a dashed border, a smaller title. Its full model recipes (Roasted Roots with Rosemary) stay normal cards.
+- Browsing in the book's order, each chapter shows its full recipes first, then the variations under a heading per
+  method ("Variations · Roast: one tray, 20–35 min", which opens the method). `bookOrder` does the reordering.
+- Elsewhere (searching, other orders) a variation's card names its method: "Vegetables · Sauté variation", so
+  Carrots with ginger (Sauté) and Carrot and ginger (Mash) read as the two dishes they are.
+- With a chapter chosen, cards leave the chapter's name out, as they do under a chapter heading.

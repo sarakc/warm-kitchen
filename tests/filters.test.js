@@ -75,6 +75,25 @@ test("methodIds finds the method recipes whose variations are their own recipes"
   assert.deepEqual([...methodIds(R)], ["roast"]);
 });
 
+test("variationIds finds a method's one-line variations, not its full model recipes", () => {
+  const { variationIds } = loadFinder();
+  const R = [
+    { id: "roast", variations: [{ name: "Carrots with cumin (Morocco) ○" }, { name: "Crème squash" }], parent: null },
+    { id: "roots", title: "Roasted Roots", variations: [], parent: "roast" },
+    { id: "carrots", title: "Carrots with cumin", variations: [], parent: "roast" },
+    { id: "squash", title: "Creme squash", variations: [], parent: "roast" },
+    { id: "rice", title: "Rice", variations: [], parent: null },
+  ];
+  assert.deepEqual([...variationIds(R, new Set(["roast"]))], ["carrots", "squash"]);
+});
+
+test("bookOrder puts each chapter's variations after its full recipes, keeping book order otherwise", () => {
+  const { bookOrder } = loadFinder();
+  const r = (id, chapter, v = false) => ({ id, chapter, v });
+  const list = [r("a", 1), r("v1", 1, true), r("b", 1), r("v2", 1, true), r("c", 2), r("v3", 3, true), r("d", 3)];
+  assert.deepEqual([...bookOrder(list, x => x.v).map(x => x.id)], ["a", "b", "v1", "v2", "c", "d", "v3"]);
+});
+
 test("ingSuggest offers ingredients with a word starting with what's typed, most-used first", () => {
   const { ingSuggest } = loadFinder();
   const vocab = [
