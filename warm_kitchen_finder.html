@@ -285,7 +285,7 @@ select.pill.on { border-color: color-mix(in srgb, var(--accent) 55%, transparent
 @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
 .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap;
              font: 600 9.5px/1.4 var(--label); letter-spacing: .14em; text-transform: uppercase; }
-.card-head .ch { color: var(--faint); }
+.card-head .ch { color: var(--faint); padding: 6px 0; margin: -6px 0; }
 .card-head .meth { color: var(--faint); font-weight: 500; }
 .ready { display: inline-flex; gap: 6px; align-items: baseline; }
 .ready .dot { width: 6px; height: 6px; margin: 0; transform: translateY(-1px); }
@@ -357,6 +357,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 .linkbtn:hover, .linkbtn[aria-pressed="true"] { text-decoration: underline; text-underline-offset: 2px; }
 .ingl { color: inherit; text-decoration: underline dotted var(--faint); text-underline-offset: 3px; }
 .ingl:hover, .ingl.on { text-decoration: underline solid var(--accent); }
+.ingl.on { font-weight: 600; text-decoration-thickness: 2px; }
 .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; display: inline-block; }
 .st-ready .dot { background: var(--good); }
 .st-close .dot { background: var(--warn); }
@@ -374,7 +375,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 .favs-head .plans-head { margin: 0; }
 .plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .plan { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 18px 18px 14px; }
-.plan h3 { font: 400 22px/1.15 var(--display); margin: 0 0 10px; }
+.plan :is(h3, h4) { font: 400 22px/1.15 var(--display); margin: 0 0 10px; }
 .plan ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .plan li { font-size: 15px; line-height: 1.45; padding-left: 0; }
 .plan li .when { font: 600 10.5px/1 var(--label); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-right: 6px; }
@@ -584,6 +585,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+  <p class="visually-hidden" id="sheet-status" role="status"></p>
   <div class="sheet-bar">
     <span class="label" id="sheet-chapter"></span>
     <div class="sheet-actions">
@@ -1032,6 +1034,7 @@ function stampClock(clock, base, cur, now) {
   return out;
 }
 /* @end-testable */
+const andList = xs => xs.length < 3 ? xs.join(" and ") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
 const short = id => (V[id] ? V[id].label.replace(/\s*\(.*\)$/, "") : id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const chapName = c => c.replace(/^\d+\.\s*/, "");
@@ -1688,7 +1691,9 @@ const tradChips = ts => ts.length ? `<span class="trads">${ts.map(t => SYSTEMS.i
   ? filterBtn("trad", t, t, "trad sys", t, "Healing tradition") : filterBtn("trad", t, t, "trad")).join("")}</span>` : "";
 const FILTER_OK = { jobs: v => JOBS.includes(v), chapter: v => chapters.includes(v), trad: v => tradValue(v, TRADS) === v, uses: v => Object.hasOwn(V, v) };
 let pendingFilter = null;
-function filterFrom(kind, v) {
+// After Back undoes a filter, focus returns to the recipe it was set from (see route).
+let filterBack = null, backFocus = null;
+function filterFrom(kind, v, fromId = null) {
   if (!Object.hasOwn(FILTER_OK, kind) || !FILTER_OK[kind](v)) return;
   const go = () => {
     toggleFilter(S, kind, v);
@@ -1696,7 +1701,10 @@ function filterFrom(kind, v) {
     // a new entry, so Back undoes the filter (and returns to the tab it was clicked in)
     clearTimeout(urlTimer);
     const url = location.pathname + searchNow();
-    if (url !== location.pathname + location.search + location.hash) history.pushState(null, "", url);
+    if (url !== location.pathname + location.search + location.hash) {
+      filterBack = { search: location.search, id: fromId };
+      history.pushState(null, "", url);
+    }
     urlSearch = location.search;
     // focus the filter it changed, where it can be turned off again
     const key = kind === "uses" ? "uses:" + v : kind;
@@ -1767,10 +1775,10 @@ $("fav-group").addEventListener("click", e => {
 function renderPlans() {
   const box = $("plan-list");
   box.innerHTML = planSections(D.plans).map(sec => (sec.title ? `<h3 class="group">${esc(sec.title)}<span class="n">${sec.plans.length}</span></h3>` : "") +
-    sec.plans.map(planHTML).join("")).join("");
+    sec.plans.map(p => planHTML(p, sec.title ? 4 : 3)).join("")).join("");
 }
-function planHTML(p) {
-  return `<article class="plan"><h3>${esc(p.title)}</h3><ul>${p.items.map(it => {
+function planHTML(p, level = 3) {
+  return `<article class="plan"><h${level}>${esc(p.title)}</h${level}><ul>${p.items.map(it => {
     const m = it.match(/^([A-Z][a-z]+):\s*(.*)$/);
     const when = m ? `<span class="when">${esc(m[1])}</span>` : "";
     let h = esc(m ? m[2] : it);
@@ -1803,7 +1811,7 @@ function renderSheet(r) {
     const ids = [...new Set(l.groups.flat(2))];
     // links rather than buttons, so they wrap with the words around them like the rest of the line
     const text = linkIngredients(rich(l.text, r.id), ids, ingNames, (id, t) =>
-      `<a class="ingl${S.uses.has(id) ? " on" : ""}" href="?uses=${id}" data-filter="uses" data-v="${id}" aria-label="Filter by ${t}" title="Recipes that use ${esc(short(id))}">${t}</a>`);
+      `<a class="ingl${S.uses.has(id) ? " on" : ""}" href="?uses=${id}" data-filter="uses" data-v="${id}"${S.uses.has(id) ? ' aria-current="true"' : ""} aria-label="Filter by ${t}" title="Recipes that use ${esc(short(id))}">${t}</a>`);
     return `<li class="${cls}">${text}${need}</li>`;
   };
   const main = lines.filter(l => l.kind === "main" && !l.hidden), serve = lines.filter(l => l.kind === "serve"),
@@ -1833,7 +1841,7 @@ function renderSheet(r) {
   const st = statusOf(ev);
   $("sheet-page").innerHTML = `
     <div class="tags">${r.tags.map(t => jobBtn(t)).join("")}</div>
-    <h2 id="sheet-title">${esc(r.title)}</h2>
+    <h2 id="sheet-title" tabindex="-1">${esc(r.title)}</h2>
     ${names.length ? `<p class="names">${namesHTML(names)}</p>` : ""}
     ${tradChips(tradsOf(r))}
     ${note && !(english && within(note, english.text)) ? `<p class="origin">${esc(note)}</p>` : ""}
@@ -1929,7 +1937,12 @@ function closeRecipe() {
 function refreshSheet() { if (openId) renderSheet(byId[openId]); }
 document.addEventListener("click", e => {
   const flt = e.target.closest("[data-filter]");
-  if (flt) { e.preventDefault(); filterFrom(flt.dataset.filter, flt.dataset.v); return; }
+  if (flt) {
+    e.preventDefault();
+    const card = flt.closest(".cardbox, .plan li"), o = card && card.querySelector("[data-open]");
+    filterFrom(flt.dataset.filter, flt.dataset.v, openId || (o && o.dataset.open) || null);
+    return;
+  }
   const f = e.target.closest("[data-fav]");
   if (f) {
     e.preventDefault();
@@ -1948,7 +1961,13 @@ document.addEventListener("click", e => {
     return;
   }
   const add = e.target.closest("[data-addall]");
-  if (add) setHave(new Set([...S.have, ...add.dataset.addall.split(",")]));
+  if (add) {
+    const ids = add.dataset.addall.split(","), at = [...sheet.querySelectorAll("[data-addall]")].indexOf(add);
+    setHave(new Set([...S.have, ...ids]));
+    const next = sheet.querySelectorAll("[data-addall]")[Math.max(at, 0)];
+    (next || $("sheet-title")).focus();
+    $("sheet-status").textContent = `Added ${andList(ids.map(short))} to your pantry`;
+  }
 });
 $("sheet-close").addEventListener("click", closeRecipe);
 $("sheet-prev").addEventListener("click", () => step(-1));
@@ -2005,7 +2024,10 @@ function route() {
     else if (HASH_TAB[h]) showTab(HASH_TAB[h]);
     return;
   }
-  if (urlSearch !== null && location.search !== urlSearch) { clearTimeout(urlTimer); readURL(); syncControls(); renderResults(); }
+  if (urlSearch !== null && location.search !== urlSearch) {
+    clearTimeout(urlTimer); readURL(); syncControls(); renderResults();
+    if (filterBack && location.search === filterBack.search) { backFocus = filterBack.id || ""; filterBack = null; }
+  }
   if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); if (h === "pantry") {
       if (!wide.matches) $("view-pantry").scrollIntoView({ block: "start" });
       if (focusPantry) $("pantry-title").focus({ preventScroll: true });
@@ -2014,6 +2036,13 @@ function route() {
   }
   else if (byId[h]) openRecipe(h, { fromHash: true, nav: "hash" });
   else { showTab("recipes"); hideSheet(); }
+  if (backFocus !== null && !openId) {
+    const panel = document.querySelector("[role=tabpanel]:not([hidden])");
+    const card = backFocus && panel && panel.querySelector(`[data-open="${CSS.escape(backFocus)}"]`);
+    const fallback = !panel || panel.id === "view-recipes" ? $("summary") : $("tab-" + panel.id.slice(5));
+    (card || fallback || $("summary")).focus();
+    backFocus = null;
+  }
 }
 window.addEventListener("popstate", route);
 window.addEventListener("hashchange", route);
