@@ -37,9 +37,10 @@ Status colours and dots mean the same thing everywhere, always with a word besid
 
 ## Layout and shape
 
-- Desktop: a 300px sticky rail (contents, your kitchen) beside a flexible recipe area capped
-  around 1180px. Below 900px the rail becomes a stacked top section, its groups folded; below
-  700px the toolbar stacks.
+- Desktop: a 300px sticky rail (views, contents) beside a flexible recipe area capped
+  around 1180px. The views are tabs, each with a count: Recipes, Meal plans, Favorites, Pantry.
+  Below 900px the rail becomes a stacked top section, its tabs in one row and its groups
+  folded; below 700px the toolbar stacks.
 - Cards: a 1px warm border, 8px radius, white surface, no heavy shadow.
 - Controls: 1px warm borders, 4–8px radii, heights about 28–44px. Tags 3px, chips 4px.
 - Secondary filters fold behind "More filters".
@@ -53,7 +54,8 @@ Status colours and dots mean the same thing everywhere, always with a word besid
 - The pantry match has one vocabulary. The filter is "Missing from your pantry": Any, None,
   Up to 1, Up to 2. Cards say "Ready to cook" when nothing tracked is missing,
   "Missing: ginger" for one, "Missing 2: ginger, salmon" for two, and the count alone above
-  that. Day-plan legends use the same words. "Flexible" is only for recipes with no fixed
+  that. Day-plan legends use the same words. The default recipe order is "By chapter"
+  ("Best match" while searching). "Flexible" is only for recipes with no fixed
   tracked ingredients, never for a complete match.
 
 ## Behaviour

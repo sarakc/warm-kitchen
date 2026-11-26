@@ -105,7 +105,9 @@ a:hover { text-decoration: underline; }
 .views .n { font: 500 11px/1 var(--label); color: var(--faint); font-variant-numeric: tabular-nums; }
 @media (max-width: 900px) {
   .views { flex-direction: row; margin-top: 18px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .views button { flex: 1; border-right: 0; border-bottom: 2px solid transparent; padding: 12px clamp(16px, 4vw, 26px); }
+  .views { overflow-x: auto; scrollbar-width: none; }
+  .views button { flex: 1 0 auto; justify-content: center; gap: 6px; white-space: nowrap; border-right: 0; border-bottom: 2px solid transparent;
+                  padding: 12px clamp(8px, 2.6vw, 26px); }
   .views button[aria-selected="true"] { border-bottom-color: var(--accent); }
 }
 .rail-label { font: 600 10px/1.2 var(--label); letter-spacing: .16em; text-transform: uppercase; color: var(--faint); margin: 0; }
@@ -113,20 +115,11 @@ a:hover { text-decoration: underline; }
 .textbtn { border: 0; background: none; padding: 0; min-height: 30px; font: 600 10.5px/1 var(--label); letter-spacing: .12em;
            text-transform: uppercase; color: var(--faint); }
 .textbtn:hover { color: var(--accent-ink); }
-/* rail: one pantry line */
-.pantry-line { margin: 26px 0 0; font: 600 12.5px/1.2 var(--label); color: var(--muted); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.pantry-line .n { font-variant-numeric: tabular-nums; }
-.pantry-line button { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-ink); text-decoration: underline;
-                      text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; min-height: 30px; }
-@media (max-width: 900px) { .pantry-line { margin: 0; padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--line); } }
-.rail-hint { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
-@media (max-width: 900px) { .rail-hint { margin: 0; padding-top: 0; padding-bottom: 12px; } }
+.rail-hint { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+@media (max-width: 900px) { .rail-hint { margin: 0; padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); } }
 /* pantry view */
 .pantry-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
 .pantry-top h2 { font: 300 28px/1.1 var(--display); margin: 0; letter-spacing: -.01em; }
-.pantry-top .back { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 0 14px; min-height: 40px;
-                    font: 600 12.5px/1 var(--label); color: var(--accent-ink); }
-.pantry-top .back:hover { background: var(--wash); }
 .pantry-hint { color: var(--muted); font-size: 13.5px; line-height: 1.45; margin: 0 0 14px; }
 .pantry-bar { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; padding: 12px; margin: 0 0 8px;
               border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
@@ -458,13 +451,13 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
       <button role="tab" id="tab-recipes" aria-selected="true" aria-controls="view-recipes">Recipes <span class="n" id="n-recipes"></span></button>
       <button role="tab" id="tab-plans" aria-selected="false" aria-controls="view-plans">Meal plans <span class="n" id="n-plans"></span></button>
       <button role="tab" id="tab-favs" aria-selected="false" aria-controls="view-favs">Favorites <span class="n" id="n-favs"></span></button>
+      <button role="tab" id="tab-pantry" aria-selected="false" aria-controls="view-pantry">Pantry <span class="n" id="n-pantry"></span></button>
     </div>
+    <p class="rail-hint rail-pad" id="rail-hint" hidden></p>
     <details class="fold" id="contents-wrap">
       <summary class="rail-label"><span>Contents</span><span class="fold-n" id="contents-state"></span></summary>
       <nav class="contents" id="contents" aria-label="Chapters"></nav>
     </details>
-    <p class="pantry-line rail-pad" id="pantry-line">Pantry · <span class="n" id="pantry-n"></span> · <button type="button" id="pantry-edit">Edit</button></p>
-    <p class="rail-hint rail-pad" id="rail-hint" hidden></p>
   </aside>
 
 
@@ -503,7 +496,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
         <button class="linkish" id="clear-filters" type="button">Clear filters</button>
         <label class="order"><span>Order</span>
           <select class="pill" id="sort">
-            <option value="book">As in the book</option>
+            <option value="book">By chapter</option>
             <option value="best">Ready to cook first</option>
             <option value="trad">By tradition</option>
             <option value="az">A to Z</option>
@@ -512,10 +505,9 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
       <div class="grid" id="grid"></div>
     </section>
 
-    <section id="view-pantry" aria-labelledby="pantry-title" hidden>
+    <section id="view-pantry" role="tabpanel" aria-labelledby="tab-pantry" hidden>
       <div class="pantry-top">
         <h2 id="pantry-title" tabindex="-1">Pantry</h2>
-        <button class="back" id="pantry-back" type="button">← Recipes</button>
       </div>
       <p class="pantry-hint" id="pantry-hint">Each card shows what you'd still need beyond this list.</p>
       <div class="pantry-bar">
@@ -1353,7 +1345,7 @@ function renderPantry() {
 wide.addEventListener("change", () => { if (!$("view-pantry").hidden) renderPantry(); });
 // Ticks, counts and the undo line follow S.have without rebuilding the grid, so a click doesn't move what's under the cursor.
 function syncPantry() {
-  $("pantry-n").textContent = `${S.have.size} of ${TOTAL}`;
+  $("n-pantry").textContent = S.have.size;
   document.querySelectorAll("#pantry-grid input[type=checkbox]").forEach(cb => { cb.checked = S.have.has(cb.dataset.id); });
   document.querySelectorAll("#pantry-grid .pgroup").forEach(g => {
     const ids = CAT_IDS[g.dataset.cat];
@@ -1420,12 +1412,6 @@ $("pantry-show").addEventListener("click", e => {
   document.querySelectorAll("#pantry-show button").forEach(x => x.setAttribute("aria-pressed", x === b));
   renderPantry();
 });
-let focusPantry = false;
-$("pantry-edit").addEventListener("click", () => {
-  if (location.hash === "#pantry") { $("pantry-title").focus(); return; }
-  focusPantry = true; location.hash = "pantry";
-});
-$("pantry-back").addEventListener("click", () => { showRecipes(); $("pantry-edit").focus(); });
 async function syncConnect(token, btn) {
   btn.disabled = true; $("sync-msg").textContent = "Connecting…";
   try { await Sync.connect(token); $("sync-token").value = ""; }
@@ -1610,7 +1596,7 @@ function renderResults() {
   const ready = list.filter(r => !evs.get(r.id).missing.length).length;
   $("summary").innerHTML = (list.length !== LIST.length ? `<strong>${list.length} of ${LIST.length} recipes</strong>` : `<strong>All ${LIST.length} recipes</strong>`) +
     (S.have.size ? ` · <span class="ok">${ready} ready</span> with your kitchen` : "");
-  $("sort").querySelector('[value="book"]').textContent = qActive ? "Best match" : "As in the book";
+  $("sort").querySelector('[value="book"]').textContent = qActive ? "Best match" : "By chapter";
   const chips = [];
   S.uses.forEach(id => chips.push(["Must include", short(id), "uses:" + id]));
   $("active").innerHTML = chips.map(([k, v, key]) => `<span class="fchip"><span class="k">${k}</span>${esc(v)}<button type="button" class="x" data-unset="${esc(key)}" aria-label="Remove filter: ${k} ${esc(v)}">×</button></span>`).join("");
@@ -1994,9 +1980,8 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------------- tabs and hash ---------------- */
-// Views: recipes, plans, favs and the pantry. All but Recipes have a hash (#plans, #favorites, #pantry); the pantry
-// is opened from the rail line, so it has no tab.
-const TAB_HASH = { plans: "plans", favs: "favorites" };
+// Views: recipes, plans, favs and the pantry. All but Recipes have a hash (#plans, #favorites, #pantry).
+const TAB_HASH = { plans: "plans", favs: "favorites", pantry: "pantry" };
 const HASH_TAB = dict([["plans", "plans"], ["favorites", "favs"], ["pantry", "pantry"]]);
 function showTab(name) {
   ["recipes", "plans", "favs", "pantry"].forEach(t => {
@@ -2011,7 +1996,7 @@ function showRecipes() {
   if (HASH_TAB[location.hash.slice(1)]) history.pushState(null, "", location.pathname + location.search);
 }
 $("tab-recipes").addEventListener("click", showRecipes);
-["plans", "favs"].forEach(t => $("tab-" + t).addEventListener("click", () => {
+["plans", "favs", "pantry"].forEach(t => $("tab-" + t).addEventListener("click", () => {
   showTab(t); if (location.hash !== "#" + TAB_HASH[t]) location.hash = TAB_HASH[t];
 }));
 function route() {
@@ -2028,12 +2013,7 @@ function route() {
     clearTimeout(urlTimer); readURL(); syncControls(); renderResults();
     if (filterBack && location.search === filterBack.search) { backFocus = filterBack.id || ""; filterBack = null; }
   }
-  if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); if (h === "pantry") {
-      if (!wide.matches) $("view-pantry").scrollIntoView({ block: "start" });
-      if (focusPantry) $("pantry-title").focus({ preventScroll: true });
-    }
-    focusPantry = false;
-  }
+  if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); }
   else if (byId[h]) openRecipe(h, { fromHash: true, nav: "hash" });
   else { showTab("recipes"); hideSheet(); }
   if (backFocus !== null && !openId) {
