@@ -64,6 +64,8 @@ Exact spacing, colours within the tokens, and test updates (`tests/filters.test.
   tint, a dashed border, a smaller title. Its full model recipes (Roasted Roots with Rosemary) stay normal cards.
 - Browsing in the book's order, each chapter shows its full recipes first, then the variations under a heading per
   method ("Variations · Roast: one tray, 20–35 min", which opens the method). `bookOrder` does the reordering.
-- Elsewhere (searching, other orders) a variation's card names its method: "Vegetables · Sauté variation", so
-  Carrots with ginger (Sauté) and Carrot and ginger (Mash) read as the two dishes they are.
+- Variation cards carry no method label. Their names say the method where it isn't obvious: the book now has
+  "Sautéed carrots with ginger" and, under Mash and purée, "Carrot and ginger mash", "Cauliflower purée with ghee
+  and nutmeg", "Kabocha mash with miso butter", "Parsnip and potato mash" and "Crushed peas with butter and mint".
+  Ids are unchanged.
 - With a chapter chosen, cards leave the chapter's name out, as they do under a chapter heading.

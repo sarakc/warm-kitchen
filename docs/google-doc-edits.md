@@ -9,7 +9,7 @@ Needed. Until these are made, four finder records differ from the book's index:
 - [ ] **Turkey:** add **Sahlab**. Its heading says "(Levant and Turkey)" but the index lists it only under Levant, Egypt and Maghreb. Keep it there too.
 - [ ] **New line, Mediterranean:** **Leek, Fennel and White Bean Soup**. Take it off the "No single tradition" line.
 - [ ] **New line, Central Europe:** **Cabbage with butter and caraway**. This is a "Braise and simmer" Variations bullet, already marked "(Central Europe)".
-- [ ] **New line, Northern Europe:** **Parsnip and potato**. This is a "Mash and purée" Variations bullet, already marked "(Northern Europe)".
+- [ ] **New line, Northern Europe:** **Parsnip and potato mash**. This is a "Mash and purée" Variations bullet, already marked "(Northern Europe)".
   - The book's index doesn't list Variations bullets one by one, so for these two the line can say "Cabbage with butter and caraway (Braise and simmer)" and so on. Or skip both lines: the finder has the chips either way.
 - [ ] **Optional:** for Kitchari and Spiced Milk, change the heading's bracket from "(Ayurveda)" to "(India / Ayurveda)". For Ayurvedic Spice Blend, add "(India / Ayurveda)". The finder already shows India on all three.
 - [ ] **Move four recipes off "No single tradition":** Ghee goes under India, Fish and Kombu Broth and Sweet potato or kabocha with Gomasio go under Japan, and Teff Porridge with Dates and Cardamom goes under Ethiopia. The finder already shows these chips.
