@@ -95,3 +95,46 @@ test("undoText words", () => {
   assert.equal(undoText("select", 12), "Added 12");
   assert.equal(undoText("everyday", 30), "Added 30");
 });
+
+test("bulkApply no-ops report n = 0 and change nothing", () => {
+  const { bulkApply } = loadFinder();
+  const have = new Set(["ginger", "salmon"]);
+  const sel = bulkApply(have, ["ginger", "salmon"], "select", []);
+  assert.equal(sel.n, 0);
+  assert.deepEqual([...sel.have].sort(), ["ginger", "salmon"]);
+  const clr = bulkApply(have, ["cumin", "oats"], "clear", []);
+  assert.equal(clr.n, 0);
+  assert.deepEqual([...clr.have].sort(), ["ginger", "salmon"]);
+});
+
+test("search and Show combined, then select, change only what is shown", () => {
+  const { visiblePantry, bulkPantry, bulkApply } = loadFinder();
+  const have = new Set(["ginger"]);
+  const shown = bulkPantry(visiblePantry(VOCAB, have, { search: "c", show: "missing" }));
+  assert.deepEqual(Array.from(shown).sort(), ["creme", "cumin"]);
+  const r = bulkApply(have, shown, "select", []);
+  assert.deepEqual([...r.have].sort(), ["creme", "cumin", "ginger"]);
+  assert.equal(r.n, 2);
+});
+
+test("any pantry change clears the undo; undo restores the exact previous set once", () => {
+  const { pantryChange, pantryUndo, bulkApply, undoText } = loadFinder();
+  let st = { have: new Set(["ginger", "salmon"]), undo: null };
+  // Clear all, with an undo
+  const cleared = bulkApply(st.have, ["ginger", "salmon"], "clear", []);
+  st = pantryChange(st, cleared.have, undoText("clear", cleared.n));
+  assert.equal(st.undo.text, "Cleared 2");
+  assert.equal(st.have.size, 0);
+  // "add all missing" on a recipe is a plain change: no undo label, so the undo is gone
+  st = pantryChange(st, new Set([...st.have, "cumin", "oats"]));
+  assert.equal(st.undo, null);
+  // pressing Undo now does nothing; the new ticks stay
+  const after = pantryUndo(st);
+  assert.deepEqual([...after.have].sort(), ["cumin", "oats"]);
+  // and a normal undo restores the exact old set, once
+  let s2 = pantryChange({ have: new Set(["ginger", "salmon"]), undo: null }, new Set(), "Cleared 2");
+  s2 = pantryUndo(s2);
+  assert.deepEqual([...s2.have].sort(), ["ginger", "salmon"]);
+  assert.equal(s2.undo, null);
+  assert.deepEqual([...pantryUndo(s2).have].sort(), ["ginger", "salmon"]);
+});

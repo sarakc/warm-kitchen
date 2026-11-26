@@ -129,6 +129,8 @@ a:hover { text-decoration: underline; }
 .pantry-line button { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-ink); text-decoration: underline;
                       text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; min-height: 30px; }
 @media (max-width: 900px) { .pantry-line { margin: 0; padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--line); } }
+.rail-hint { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+@media (max-width: 900px) { .rail-hint { margin: 0; padding-top: 0; padding-bottom: 12px; } }
 /* pantry view */
 .pantry-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 12px; }
 .pantry-top h2 { font: 300 28px/1.1 var(--display); margin: 0; letter-spacing: -.01em; }
@@ -419,6 +421,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
       <nav class="contents" id="contents" aria-label="Chapters"></nav>
     </details>
     <p class="pantry-line rail-pad" id="pantry-line">Pantry · <span class="n" id="pantry-n"></span> · <button type="button" id="pantry-edit">Edit</button></p>
+    <p class="rail-hint rail-pad" id="rail-hint" hidden></p>
   </aside>
 
 
@@ -475,7 +478,7 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
 
     <section id="view-pantry" aria-labelledby="pantry-title" hidden>
       <div class="pantry-top">
-        <h2 id="pantry-title">Pantry</h2>
+        <h2 id="pantry-title" tabindex="-1">Pantry</h2>
         <button class="back" id="pantry-back" type="button">← Recipes</button>
       </div>
       <p class="pantry-hint" id="pantry-hint">Each card shows what you'd still need beyond this list.</p>
@@ -500,7 +503,8 @@ button.tag:hover, button.tag[aria-pressed="true"] { box-shadow: inset 0 0 0 1px 
         </div>
         <p class="pantry-count" id="pantry-count" aria-live="polite"></p>
       </div>
-      <p class="pantry-undo" id="pantry-undo" role="status" hidden><span id="pantry-undo-text"></span> · <button type="button" id="pantry-undo-btn">Undo</button></p>
+      <p class="visually-hidden" id="pantry-status" role="status"></p>
+      <p class="pantry-undo" id="pantry-undo" hidden><span id="pantry-undo-text"></span> · <button type="button" id="pantry-undo-btn">Undo</button></p>
       <div class="pantry-grid" id="pantry-grid"></div>
     </section>
 
@@ -791,6 +795,10 @@ function bulkApply(have, ids, mode, everyday) {
 function undoText(kind, n) {
   return kind === "clear" ? `Cleared ${n}` : `Added ${n}`;
 }
+// The one path every pantry change takes. A change with an undo label keeps the old set for one Undo; a change without
+// one (a tick, a category button, "add all missing" on a recipe) clears any pending undo.
+const pantryChange = (st, have, label) => ({ have, undo: label ? { prev: st.have, text: label } : null });
+const pantryUndo = st => st.undo ? { have: st.undo.prev, undo: null } : st;
 // A recipe's names in its own language, from the optional r.names = { native, lang, romanized, english }.
 // The native name carries its lang (for the right glyphs) and dir (rtl for Arabic-script and Hebrew names).
 const RTL_LANGS = ["ar", "fa", "ur", "ps", "ug", "ckb", "sd", "he", "yi", "dv"];
@@ -1057,16 +1065,17 @@ function renderDatalist() {
    Search and Show are view state only. A bulk button acts on what is shown and can be undone once; the next change clears it. */
 const P = { search: "", show: "all", undo: null };
 const TOTAL = D.vocab.length;
+const CAT_IDS = {}; D.vocab.forEach(v => { (CAT_IDS[v.cat] = CAT_IDS[v.cat] || []).push(v.id); });
 const pantryShown = () => visiblePantry(D.vocab, S.have, P);
 function renderPantry() {
   const groups = pantryShown();
-  $("pantry-grid").innerHTML = groups.length ? groups.map(g => `<section class="pgroup" aria-label="${esc(g.cat)}">
+  $("pantry-grid").innerHTML = groups.length ? groups.map(g => `<div class="pgroup" data-cat="${esc(g.cat)}">
       <div class="pgroup-head"><h3>${esc(g.cat)}</h3><span class="count"></span>
-        <button type="button" class="textbtn" data-cat-set="select" aria-label="Select all in ${esc(g.cat)}">All</button>
-        <button type="button" class="textbtn" data-cat-set="clear" aria-label="Clear all in ${esc(g.cat)}">None</button></div>
+        <button type="button" class="textbtn" data-cat-set="select" aria-label="All in ${esc(g.cat)}">All</button>
+        <button type="button" class="textbtn" data-cat-set="clear" aria-label="None in ${esc(g.cat)}">None</button></div>
       <div class="checks">${g.items.map(v => `<label><input type="checkbox" data-id="${v.id}">
-        <span>${esc(v.label)}</span><span class="uses" title="Recipes that use it">${usesCount[v.id] || 0}</span></label>`).join("")}</div>
-    </section>`).join("") : `<p class="empty-note">Nothing matches.</p>`;
+        <span>${esc(v.label)}</span><span class="uses" title="Recipes that use it" aria-hidden="true">${usesCount[v.id] || 0}</span></label>`).join("")}</div>
+    </div>`).join("") : `<p class="empty-note">Nothing matches.</p>`;
   syncPantry();
 }
 // Ticks, counts and the undo line follow S.have without rebuilding the grid, so a click doesn't move what's under the cursor.
@@ -1074,29 +1083,38 @@ function syncPantry() {
   $("pantry-n").textContent = `${S.have.size} of ${TOTAL}`;
   document.querySelectorAll("#pantry-grid input[type=checkbox]").forEach(cb => { cb.checked = S.have.has(cb.dataset.id); });
   document.querySelectorAll("#pantry-grid .pgroup").forEach(g => {
-    const ids = [...g.querySelectorAll("input")].map(i => i.dataset.id);
+    const ids = CAT_IDS[g.dataset.cat];
     g.querySelector(".count").textContent = `${ids.filter(id => S.have.has(id)).length} of ${ids.length}`;
   });
   const shown = bulkPantry(pantryShown()).length;
   $("pantry-count").textContent = shown === TOTAL ? `${S.have.size} of ${TOTAL} in your pantry` : `${shown} shown · ${S.have.size} of ${TOTAL} in your pantry`;
   $("pantry-undo").hidden = !P.undo;
-  if (P.undo) $("pantry-undo-text").textContent = P.undo.text;
+  $("pantry-undo-text").textContent = P.undo ? P.undo.text : "";
+  $("pantry-status").textContent = P.undo ? P.undo.text : "";
 }
-function kitchenChanged() { save(); syncPantry(); renderResults(); renderPlans(); renderFavs(); refreshSheet(); }
-// Every change clears the undo; the three bulk buttons set it again.
-function setHave(next, undo) { P.undo = undo || null; S.have = next; kitchenChanged(); }
+function kitchenChanged() {
+  $("rail-hint").hidden = true;
+  save(); syncPantry(); renderResults(); renderPlans(); renderFavs(); refreshSheet();
+}
+// Every write to S.have goes through here, so the undo is cleared (or set) in one place.
+function setHave(next, label) {
+  const st = pantryChange({ have: S.have }, next, label);
+  S.have = st.have; P.undo = st.undo; kitchenChanged();
+}
 function bulk(mode) {
-  const prev = S.have, r = bulkApply(prev, bulkPantry(pantryShown()), mode, EVERYDAY);
+  const r = bulkApply(S.have, bulkPantry(pantryShown()), mode, EVERYDAY);
   if (!r.n) return;
-  setHave(r.have, { prev, text: undoText(mode, r.n) });
+  setHave(r.have, undoText(mode, r.n));
   if (P.show !== "all") renderPantry();
 }
 $("pantry-all").addEventListener("click", () => bulk("select"));
 $("pantry-none").addEventListener("click", () => bulk("clear"));
 $("btn-everyday").addEventListener("click", () => bulk("everyday"));
 $("pantry-undo-btn").addEventListener("click", () => {
-  if (!P.undo) return;
-  const prev = P.undo.prev; setHave(prev); renderPantry();
+  const st = pantryUndo({ have: S.have, undo: P.undo });
+  if (st.have === S.have) return;
+  S.have = st.have; P.undo = null; kitchenChanged(); renderPantry();
+  $("pantry-title").focus({ preventScroll: true });
 });
 $("pantry-grid").addEventListener("change", e => {
   const cb = e.target.closest("input[type=checkbox]"); if (!cb) return;
@@ -1115,8 +1133,12 @@ $("pantry-show").addEventListener("click", e => {
   document.querySelectorAll("#pantry-show button").forEach(x => x.setAttribute("aria-pressed", x === b));
   renderPantry();
 });
-$("pantry-edit").addEventListener("click", () => { location.hash = "pantry"; });
-$("pantry-back").addEventListener("click", () => showRecipes());
+let focusPantry = false;
+$("pantry-edit").addEventListener("click", () => {
+  if (location.hash === "#pantry") { $("pantry-title").focus(); return; }
+  focusPantry = true; location.hash = "pantry";
+});
+$("pantry-back").addEventListener("click", () => { showRecipes(); $("pantry-edit").focus(); });
 // Another tab saved: take its kitchen and favorites so this tab's next save doesn't overwrite them.
 addEventListener("storage", e => {
   if (e.key !== STORE || e.newValue == null) return;
@@ -1586,7 +1608,7 @@ document.addEventListener("click", e => {
     return;
   }
   const add = e.target.closest("[data-addall]");
-  if (add) { add.dataset.addall.split(",").forEach(id => S.have.add(id)); kitchenChanged(); }
+  if (add) setHave(new Set([...S.have, ...add.dataset.addall.split(",")]));
 });
 $("sheet-close").addEventListener("click", closeRecipe);
 $("sheet-prev").addEventListener("click", () => step(-1));
@@ -1644,7 +1666,12 @@ function route() {
     return;
   }
   if (urlSearch !== null && location.search !== urlSearch) { clearTimeout(urlTimer); readURL(); syncControls(); renderResults(); }
-  if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); if (h === "pantry" && !wide.matches) $("view-pantry").scrollIntoView({ block: "start" }); }
+  if (HASH_TAB[h]) { showTab(HASH_TAB[h]); hideSheet(); if (h === "pantry") {
+      if (!wide.matches) $("view-pantry").scrollIntoView({ block: "start" });
+      if (focusPantry) $("pantry-title").focus({ preventScroll: true });
+    }
+    focusPantry = false;
+  }
   else if (byId[h]) openRecipe(h, { fromHash: true, nav: "hash" });
   else { showTab("recipes"); hideSheet(); }
 }
@@ -1655,8 +1682,8 @@ window.addEventListener("hashchange", route);
 load();
 readURL();
 syncControls();
-if (S.firstVisit) $("pantry-hint").textContent =
-  "Started from the book's everyday pantry. Remove what you're out of; each card shows what you'd still need.";
+if (S.firstVisit) { $("rail-hint").hidden = false; $("rail-hint").textContent =
+  "Started from the book's everyday pantry. Remove what you're out of; each card shows what you'd still need."; }
 $("n-recipes").textContent = R.length;
 $("n-plans").textContent = D.plans.length;
 renderDatalist(); renderPantry(); renderResults(); renderPlans(); renderFavs(); route();
